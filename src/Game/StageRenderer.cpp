@@ -1,4 +1,6 @@
 ﻿#include "StageRenderer.h"
+#include "StageData.h"
+#include <algorithm>
 #include "../ThirdParty/tinyxml2/tinyxml2.h"
 #include "DxLib.h"
 #include <charconv>
@@ -25,6 +27,8 @@ void StageRenderer::Release_()
     }
     m_tilesets.clear();
     m_tiles.clear();
+    m_bumps.clear();
+    m_mapPixelWidth = 0.0f;
 }
 
 bool StageRenderer::Fail_(const std::string& message)
@@ -57,6 +61,7 @@ bool StageRenderer::Load(const char* filename)
     if (map->Attribute("renderorder")
         && std::strcmp(map->Attribute("renderorder"), "right-down") != 0)
         return Fail_("Use right-down tile render order.");
+    m_mapPixelWidth = static_cast<float>(mapWidth) * m_tileWidth;
     const std::filesystem::path mapPath(filename);
 
     for (const tinyxml2::XMLElement* reference = map->FirstChildElement("tileset");
@@ -189,6 +194,8 @@ bool StageRenderer::Load(const char* filename)
                 tile.flipX = (rawGid & 0x80000000u) != 0;
                 tile.flipY = (rawGid & 0x40000000u) != 0;
                 tile.diagonal = (rawGid & 0x20000000u) != 0;
+                const char* layerName = layer->Attribute("name");
+                tile.isPlatform = layerName && std::strcmp(layerName, "Platforms") == 0;
                 if (tile.diagonal && (m_tileWidth != m_tileHeight || set.tileWidth != set.tileHeight))
                     return Fail_("Diagonal flips currently require square source and map tiles.");
                 m_tiles.push_back(tile);
@@ -198,6 +205,73 @@ bool StageRenderer::Load(const char* filename)
         if (index != width * height) return Fail_("CSV tile count does not match the layer size.");
     }
     return true;
+}
+
+void StageRenderer::Update(float dt)
+{
+    if (!std::isfinite(dt) || dt <= 0.0f) return;
+    for (BumpEffect& bump : m_bumps) bump.age += dt;
+    m_bumps.erase(std::remove_if(m_bumps.begin(), m_bumps.end(),
+        [](const BumpEffect& bump) { return bump.age >= bump.duration; }),
+        m_bumps.end());
+}
+
+void StageRenderer::Bump(const StageSolid& solid, float hitX)
+{
+    if (!solid.bumpable || m_mapPixelWidth <= 0.0f || !std::isfinite(hitX)) return;
+    // 画面端のループで、元の足場の範囲へ打撃位置を戻す。
+    const float centerX = solid.x + solid.width * 0.5f;
+    hitX += std::round((centerX - hitX) / m_mapPixelWidth) * m_mapPixelWidth;
+    if (hitX < solid.x) hitX = solid.x;
+    if (hitX > solid.x + solid.width) hitX = solid.x + solid.width;
+
+    BumpEffect effect;
+    effect.solidId = solid.id;
+    effect.x = solid.x;
+    effect.y = solid.y;
+    effect.width = solid.width;
+    effect.height = solid.height;
+    effect.hitX = hitX;
+    // 同じ足場を再度叩いたら、新しい打撃位置で演出を開始し直す。
+    for (BumpEffect& bump : m_bumps)
+    {
+        if (bump.solidId == solid.id)
+        {
+            bump = effect;
+            return;
+        }
+    }
+    m_bumps.push_back(effect);
+}
+
+float StageRenderer::GetBumpOffset_(const Tile& tile) const
+{
+    if (!tile.isPlatform) return 0.0f;
+    const float centerX = tile.x + m_tileWidth * 0.5f;
+    const float centerY = tile.y + m_tileHeight * 0.5f;
+    float offset = 0.0f;
+    for (const BumpEffect& bump : m_bumps)
+    {
+        // 打撃対象の足場の中にあるタイルだけを持ち上げる。
+        if (centerX < bump.x || centerX >= bump.x + bump.width
+            || centerY < bump.y || centerY >= bump.y + bump.height) continue;
+        const float distance = std::fabs(centerX - bump.hitX);
+        if (distance >= bump.radius) continue;
+        const float strength = std::cos(distance / bump.radius * 1.5707963267948966f);
+        float lift = 0.0f;
+        if (bump.age < bump.peakTime)
+        {
+            lift = std::sin(bump.age / bump.peakTime * 1.5707963267948966f);
+        }
+        else
+        {
+            lift = std::cos((bump.age - bump.peakTime)
+                / (bump.duration - bump.peakTime) * 1.5707963267948966f);
+        }
+        const float displacement = -bump.amplitude * strength * lift;
+        if (displacement < offset) offset = displacement;
+    }
+    return offset;
 }
 
 void StageRenderer::Draw() const
@@ -211,7 +285,7 @@ void StageRenderer::Draw() const
         const double angle = tile.diagonal ? 1.5707963267948966 : 0.0;
         DrawRectRotaGraph3(
             static_cast<int>(std::lround(tile.x + m_tileWidth * 0.5f)),
-            static_cast<int>(std::lround(tile.y + m_tileHeight * 0.5f)),
+            static_cast<int>(std::lround(tile.y + m_tileHeight * 0.5f + GetBumpOffset_(tile))),
             tile.sourceX, tile.sourceY, set.tileWidth, set.tileHeight,
             set.tileWidth / 2, set.tileHeight / 2,
             static_cast<double>(m_tileWidth) / set.tileWidth,

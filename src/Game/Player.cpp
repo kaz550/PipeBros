@@ -122,6 +122,8 @@ void Player::Update(float dt, const Input& input)
         return;
     }
 
+    m_stageRenderer.Update(dt);
+
     m_lastBumpedObjectId = -1;
     const bool debugKey = CheckHitKey(KEY_INPUT_F3) != 0;
     if (debugKey && !m_prevDebugKey)
@@ -147,6 +149,18 @@ void Player::Update(float dt, const Input& input)
     ApplyGravity_(dt);
     UpdatePosition_(dt);
     ClampToGround_();
+
+    if (m_lastBumpedObjectId != -1)
+    {
+        for (const StageSolid& solid : m_stage.GetSolids())
+        {
+            if (solid.id == m_lastBumpedObjectId)
+            {
+                m_stageRenderer.Bump(solid, m_x + m_width * 0.5f);
+                break;
+            }
+        }
+    }
 
     if (!wasGrounded && m_isGrounded)
     {
