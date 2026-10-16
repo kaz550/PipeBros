@@ -19,6 +19,12 @@
     <Filter Include="Scene">
       <UniqueIdentifier>{0ed17fbc-91e3-437b-853a-f2c55d5c2bbe}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThirdParty">
+      <UniqueIdentifier>{266e07f0-d6ef-43ea-876e-a83bc53cb487}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\tinyxml2">
+      <UniqueIdentifier>{e84776fc-95e1-449a-9847-e2d3c106c1eb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Audio\Audio.cpp">
@@ -70,6 +76,13 @@
       <Filter>Game</Filter>
     </ClCompile>
     <ClCompile Include="src\Game\Background.cpp">
+      <Filter>Game</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\ThirdParty\tinyxml2\tinyxml2.cpp">
+      <Filter>ThirdParty\tinyxml2</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Game\StageData.cpp">
       <Filter>Game</Filter>
     </ClCompile>
   </ItemGroup>
@@ -147,6 +160,12 @@
       <Filter>Game</Filter>
     </ClInclude>
     <ClInclude Include="src\Game\Background.h">
+      <Filter>Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ThirdParty\tinyxml2\tinyxml2.h">
+      <Filter>ThirdParty\tinyxml2</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\StageData.h">
       <Filter>Game</Filter>
     </ClInclude>
   </ItemGroup>

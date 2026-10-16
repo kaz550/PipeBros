@@ -1,4 +1,4 @@
-#include "Player.h"
+﻿#include "Player.h"
 #include "../Input/Input.h"
 #include "../Core/Config.h"
 #include "DxLib.h"
@@ -7,7 +7,6 @@
 
 Player::Player()
 {
-
 }
 
 Player::~Player()
@@ -68,9 +67,24 @@ void Player::Reset(float x, float groundY)
 {
     LoadSprite_();
 
+    const bool stageLoaded = m_stage.Load("assets/stages/stage01.tmx");
+    if (!stageLoaded)
+    {
+        printfDx("Stage load failed: %s\n", m_stage.GetError().c_str());
+    }
+
     m_x = x;
     m_groundY = groundY;
     m_y = groundY - m_height;
+    if (stageLoaded)
+    {
+        m_x = m_stage.GetPlayerX();
+        m_y = m_stage.GetPlayerFootY() - m_height;
+        m_groundY = m_stage.GetGroundY();
+    }
+    m_lastBumpedObjectId = -1;
+    m_showStageDebug = true;
+    m_prevDebugKey = CheckHitKey(KEY_INPUT_F3) != 0;
 
     m_vx = 0.0f;
     m_vy = 0.0f;
@@ -101,6 +115,14 @@ void Player::Update(float dt, const Input& input)
     {
         return;
     }
+
+    m_lastBumpedObjectId = -1;
+    const bool debugKey = CheckHitKey(KEY_INPUT_F3) != 0;
+    if (debugKey && !m_prevDebugKey)
+    {
+        m_showStageDebug = !m_showStageDebug;
+    }
+    m_prevDebugKey = debugKey;
 
     if (m_jumpPoseTimer > 0.0f)
     {
@@ -233,6 +255,20 @@ void Player::ApplyGravity_(float dt)
 
 void Player::UpdatePosition_(float dt)
 {
+    if (m_stage.IsLoaded())
+    {
+        const float previousVelocityY = m_vy;
+        m_stage.Move(m_x, m_y, m_vx, m_vy,
+            m_width, m_height, dt, static_cast<float>(SCREEN_W),
+            m_isGrounded, m_lastBumpedObjectId);
+        if (m_isGrounded || (previousVelocityY < 0.0f && m_vy == 0.0f))
+        {
+            m_isJumpHolding = false;
+            m_jumpHoldTimer = 0.0f;
+            m_jumpPoseTimer = 0.0f;
+        }
+        return;
+    }
     m_x += m_vx * dt;
     m_y += m_vy * dt;
 
@@ -253,6 +289,10 @@ void Player::UpdatePosition_(float dt)
 
 void Player::ClampToGround_()
 {
+    if (m_stage.IsLoaded())
+    {
+        return; // 接地状態はTMXの足場判定で確定している。
+    }
     const float footY = m_y + m_height;
 
     if (m_vy >= 0.0f && footY >= m_groundY)
@@ -349,44 +389,59 @@ void Player::UpdateAnimation_(float dt)
     const int localFrame =
         static_cast<int>(m_animationTimer / frameDuration);
 
-    // $BJb$-!&Av$j$O(B3$BKg$r!V(B1 $B"*(B 2 $B"*(B 3 $B"*(B 2$B!W$G:F@8$9$k!#(B
-    // frameCount$B$N(B4$B$O2hA|Kg?t$G$O$J$/:F@8%9%F%C%W?t!#(B
+    // 歩き・走りは3枚を「1 → 2 → 3 → 2」で再生する。
+    // frameCountの4は画像枚数ではなく再生ステップ数。
     m_frameIndex = firstFrame
         + (moving && localFrame == 3 ? 1 : localFrame);
 }
 
 void Player::Draw() const
 {
+    // 足場画像を配置するまでの衝突確認表示。F3で切り替える。
+    if (m_showStageDebug && m_stage.IsLoaded())
+    {
+        for (const StageSolid& solid : m_stage.GetSolids())
+        {
+            const int color = solid.id == m_lastBumpedObjectId
+                ? GetColor(255, 180, 40) : GetColor(80, 220, 160);
+            DrawBox(static_cast<int>(solid.x), static_cast<int>(solid.y),
+                static_cast<int>(solid.x + solid.width),
+                static_cast<int>(solid.y + solid.height), color, FALSE);
+            DrawFormatString(static_cast<int>(solid.x) + 6,
+                static_cast<int>(solid.y) + 4, color, "ID %d", solid.id);
+        }
+        DrawString(20, 150, "F3: COLLISION DEBUG", GetColor(80, 220, 160));
+    }
     if (m_spriteSheet == -1)
     {
         return;
     }
 
-    // $B:G?7$N(B1402$B!_(B1122$B%T%/%;%k$N%7!<%HMQ!#(B
+    // 最新の1402×1122ピクセルのシート用。
     //
-    // x, y, $BI}(B, $B9b$5(B, $B4p=`E@(BX, $B4p=`E@(BY
+    // x, y, 幅, 高さ, 基準点X, 基準点Y
     //
-    // $B4p=`E@$O@Z$j=P$72hA|$N:8>e$+$i$NAjBP:BI8!#(B
-    // $B4p=`E@(BY$B$O2hA|30$KCV$/$3$H$b$G$-$k!#(B
-    // $BAv$j$N6uCf;Q@*$G$O7$Dl$h$j2<$KCV$-!"(B
-    // $B%-%c%i%/%?!<$rCOLL$+$i>/$7Ib$+$;$k!#(B
+    // 基準点は切り出し画像の左上からの相対座標。
+    // 基準点Yは画像外に置くこともできる。
+    // 走りの空中姿勢では靴底より下に置き、
+    // キャラクターを地面から少し浮かせる。
     static const SpriteFrame frames[] =
     {
-        // $B%"%$%I%k!'(B0$B!A(B1
+        // アイドル：0～1
         {  68,  50, 189, 241,  97.0f, 239.0f },
         { 336,  50, 188, 241,  97.0f, 239.0f },
 
-        // $BJb$-!'(B2$B!A(B4$B!J(B3$B%3%^!K(B
+        // 歩き：2～4（3コマ）
         {  54, 308, 209, 259, 111.0f, 257.0f },
         { 339, 308, 187, 259,  96.0f, 257.0f },
         { 598, 308, 205, 259, 107.0f, 257.0f },
 
-        // $BAv$j!'(B5$B!A(B7$B!J(B3$B%3%^!K(B
+        // 走り：5～7（3コマ）
         {  29, 577, 250, 260, 136.0f, 258.0f },
         { 326, 577, 215, 260, 109.0f, 258.0f },
         { 562, 577, 254, 260, 143.0f, 258.0f },
 
-        // $B%8%c%s%W!'(B8$B!A(B12$B!J(B5$B%3%^!K(B
+        // ジャンプ：8～12（5コマ）
         {  59, 882, 201, 213, 101.0f, 211.0f },
         { 321, 837, 226, 258, 113.0f, 256.0f },
         { 585, 837, 223, 229, 112.0f, 227.0f },
@@ -407,7 +462,7 @@ void Player::Draw() const
     const float anchorX = m_x + m_width * 0.5f;
     const float anchorY = m_y + m_height;
 
-    // DxLib$B$XEO$92sE>Cf?4$H!"0LCV7W;;$K;H$&Cf?4$rB7$($k(B
+    // DxLibへ渡す回転中心と、位置計算に使う中心を揃える
     const int sourceCenterX = frame.width / 2;
     const int sourceCenterY = frame.height / 2;
 
@@ -420,32 +475,32 @@ void Player::Draw() const
         * m_spriteScale;
 
     const auto drawAt = [&](float x)
-        {
-            const float drawCenterX =
-                x + (m_facingLeft
-                    ? -centerOffsetX
-                    : centerOffsetX);
+    {
+        const float drawCenterX =
+            x + (m_facingLeft
+                ? -centerOffsetX
+                : centerOffsetX);
 
-            const float drawCenterY =
-                anchorY + centerOffsetY;
+        const float drawCenterY =
+            anchorY + centerOffsetY;
 
-            DrawRectRotaGraph3(
-                static_cast<int>(drawCenterX),
-                static_cast<int>(drawCenterY),
-                frame.x,
-                frame.y,
-                frame.width,
-                frame.height,
-                sourceCenterX,
-                sourceCenterY,
-                m_spriteScale,
-                m_spriteScale,
-                0.0,
-                m_spriteSheet,
-                TRUE,
-                m_facingLeft ? TRUE : FALSE
-            );
-        };
+        DrawRectRotaGraph3(
+            static_cast<int>(drawCenterX),
+            static_cast<int>(drawCenterY),
+            frame.x,
+            frame.y,
+            frame.width,
+            frame.height,
+            sourceCenterX,
+            sourceCenterY,
+            m_spriteScale,
+            m_spriteScale,
+            0.0,
+            m_spriteSheet,
+            TRUE,
+            m_facingLeft ? TRUE : FALSE
+        );
+    };
 
     drawAt(anchorX);
 
