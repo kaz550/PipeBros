@@ -16,7 +16,9 @@ public:
     void Reset(float x, float groundY);
     void Update(float dt, const Input& input);
     void Draw() const;
+    void Respawn();
     Aabb GetAabb() const;
+    const StageData& GetStageData() const { return m_stage; }
 
     float GetX() const { return m_x; }
     float GetY() const { return m_y; }
@@ -59,6 +61,8 @@ private:
     bool m_prevJumpKey = false, m_isRunning = false;
     bool m_facingLeft = false;
 
+    float m_respawnX = 220.0f;
+    float m_respawnFootY = 620.0f;
     StageData m_stage;
     StageRenderer m_stageRenderer;
     int m_lastBumpedObjectId = -1;
@@ -71,3 +75,4 @@ private:
     float m_animationTimer = 0.0f;
     float m_jumpPoseTimer = 0.0f, m_landingTimer = 0.0f;
 };
+

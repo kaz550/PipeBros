@@ -137,6 +137,7 @@
     <ClCompile Include="src\Core\Quality.cpp" />
     <ClCompile Include="src\Core\Time.cpp" />
     <ClCompile Include="src\Game\Background.cpp" />
+    <ClCompile Include="src\Game\EnemyManager.cpp" />
     <ClCompile Include="src\Game\Obstacle.cpp" />
     <ClCompile Include="src\Game\ObstacleManager.cpp" />
     <ClCompile Include="src\Game\Player.cpp" />
@@ -163,6 +164,7 @@
     <ClInclude Include="src\Game\Aabb.h" />
     <ClInclude Include="src\Game\Background.h" />
     <ClInclude Include="src\Game\Collision.h" />
+    <ClInclude Include="src\Game\EnemyManager.h" />
     <ClInclude Include="src\Game\GridPos.h" />
     <ClInclude Include="src\Game\Obstacle.h" />
     <ClInclude Include="src\Game\ObstacleManager.h" />

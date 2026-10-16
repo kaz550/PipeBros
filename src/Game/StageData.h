@@ -12,6 +12,14 @@ struct StageSolid
     bool bumpable = false;
 };
 
+struct StageEnemySpawn
+{
+    std::string name;
+    float x = 0.0f;
+    float footY = 0.0f;
+    int direction = 1;
+};
+
 class StageData
 {
 public:
@@ -19,6 +27,7 @@ public:
     bool IsLoaded() const { return m_loaded; }
     const std::string& GetError() const { return m_error; }
     const std::vector<StageSolid>& GetSolids() const { return m_solids; }
+    const std::vector<StageEnemySpawn>& GetEnemySpawns() const { return m_enemySpawns; }
     float GetPlayerX() const { return m_playerX; }
     float GetPlayerFootY() const { return m_playerFootY; }
     float GetGroundY() const { return m_groundY; }
@@ -31,9 +40,11 @@ public:
 
 private:
     std::vector<StageSolid> m_solids;
+    std::vector<StageEnemySpawn> m_enemySpawns;
     std::string m_error;
     float m_playerX = 220.0f;
     float m_playerFootY = 620.0f;
     float m_groundY = 620.0f;
     bool m_loaded = false;
 };
+

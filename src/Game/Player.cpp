@@ -88,6 +88,8 @@ void Player::Reset(float x, float groundY)
         m_y = m_stage.GetPlayerFootY() - m_height;
         m_groundY = m_stage.GetGroundY();
     }
+    m_respawnX = m_x;
+    m_respawnFootY = m_y + m_height;
     m_lastBumpedObjectId = -1;
     m_showStageDebug = !stageImagesLoaded;
     m_prevDebugKey = CheckHitKey(KEY_INPUT_F3) != 0;
@@ -111,6 +113,25 @@ void Player::Reset(float x, float groundY)
 
     m_jumpPoseTimer = 0.0f;
     m_landingTimer = 0.0f;
+}
+
+void Player::Respawn()
+{
+    // 画像やTMXを再読み込みせず、プレイヤーだけを開始位置へ戻す。
+    m_x = m_respawnX;
+    m_y = m_respawnFootY - m_height;
+    m_vx = m_vy = 0.0f;
+    m_isGrounded = false;
+    m_isJumpHolding = false;
+    m_jumpHoldTimer = 0.0f;
+    m_prevJumpKey = CheckHitKey(KEY_INPUT_SPACE) != 0;
+    m_isRunning = false;
+    m_facingLeft = false;
+    m_animation = Animation::Idle;
+    m_animationTimer = 0.0f;
+    m_frameIndex = 0;
+    m_jumpPoseTimer = m_landingTimer = 0.0f;
+    m_lastBumpedObjectId = -1;
 }
 
 void Player::Update(float dt, const Input& input)

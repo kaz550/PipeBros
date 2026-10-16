@@ -8,6 +8,7 @@ bool StageData::Load(const char* filename)
 {
     m_loaded = false;
     m_solids.clear();
+    m_enemySpawns.clear();
     m_error.clear();
     tinyxml2::XMLDocument document;
     if (document.LoadFile(filename) != tinyxml2::XML_SUCCESS)
@@ -51,6 +52,42 @@ bool StageData::Load(const char* filename)
             const char* name = object->Attribute("name");
             if (spawns)
             {
+                const char* objectType = object->Attribute("class");
+                if (!objectType || objectType[0] == '\0') objectType = object->Attribute("type");
+                if (objectType && std::strcmp(objectType, "EnemySpawn") == 0)
+                {
+                    StageEnemySpawn spawn;
+                    spawn.name = name ? name : "EnemySpawn";
+                    if (!object->FirstChildElement("point")
+                        || object->QueryFloatAttribute("x", &spawn.x) != tinyxml2::XML_SUCCESS
+                        || object->QueryFloatAttribute("y", &spawn.footY) != tinyxml2::XML_SUCCESS
+                        || !std::isfinite(spawn.x) || !std::isfinite(spawn.footY))
+                    {
+                        m_error = "EnemySpawn must be a point with valid x/y coordinates.";
+                        return false;
+                    }
+                    spawn.direction = spawn.x < SCREEN_W * 0.5f ? 1 : -1;
+                    const tinyxml2::XMLElement* properties = object->FirstChildElement("properties");
+                    if (properties)
+                    {
+                        for (const tinyxml2::XMLElement* property = properties->FirstChildElement("property");
+                            property; property = property->NextSiblingElement("property"))
+                        {
+                            const char* key = property->Attribute("name");
+                            if (key && std::strcmp(key, "direction") == 0)
+                            {
+                                if (property->QueryIntAttribute("value", &spawn.direction) != tinyxml2::XML_SUCCESS
+                                    || (spawn.direction != 1 && spawn.direction != -1))
+                                {
+                                    m_error = "EnemySpawn direction must be 1 or -1.";
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    m_enemySpawns.push_back(spawn);
+                    continue;
+                }
                 if (!name || std::strcmp(name, "Player1") != 0) continue;
                 if (hasPlayer || !object->FirstChildElement("point")
                     || object->QueryFloatAttribute("x", &m_playerX) != tinyxml2::XML_SUCCESS
@@ -191,3 +228,4 @@ void StageData::Move(float& x, float& y, float& vx, float& vy,
         }
     }
 }
+

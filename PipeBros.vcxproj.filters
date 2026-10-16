@@ -88,6 +88,9 @@
     <ClCompile Include="src\Game\StageRenderer.cpp">
       <Filter>Game</Filter>
     </ClCompile>
+    <ClCompile Include="src\Game\EnemyManager.cpp">
+      <Filter>Game</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Audio\Audio.h">
@@ -172,6 +175,9 @@
       <Filter>Game</Filter>
     </ClInclude>
     <ClInclude Include="src\Game\StageRenderer.h">
+      <Filter>Game</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\EnemyManager.h">
       <Filter>Game</Filter>
     </ClInclude>
   </ItemGroup>
