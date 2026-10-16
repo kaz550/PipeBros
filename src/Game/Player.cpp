@@ -73,6 +73,12 @@ void Player::Reset(float x, float groundY)
         printfDx("Stage load failed: %s\n", m_stage.GetError().c_str());
     }
 
+    const bool stageImagesLoaded = m_stageRenderer.Load("assets/stages/stage01.tmx");
+    if (!stageImagesLoaded)
+    {
+        printfDx("Stage image load failed: %s\n", m_stageRenderer.GetError().c_str());
+    }
+
     m_x = x;
     m_groundY = groundY;
     m_y = groundY - m_height;
@@ -83,7 +89,7 @@ void Player::Reset(float x, float groundY)
         m_groundY = m_stage.GetGroundY();
     }
     m_lastBumpedObjectId = -1;
-    m_showStageDebug = true;
+    m_showStageDebug = !stageImagesLoaded;
     m_prevDebugKey = CheckHitKey(KEY_INPUT_F3) != 0;
 
     m_vx = 0.0f;
@@ -397,7 +403,9 @@ void Player::UpdateAnimation_(float dt)
 
 void Player::Draw() const
 {
-    // 足場画像を配置するまでの衝突確認表示。F3で切り替える。
+    m_stageRenderer.Draw();
+
+    // 足場画像と当たり判定の重なりを確認する表示。F3で切り替える。
     if (m_showStageDebug && m_stage.IsLoaded())
     {
         for (const StageSolid& solid : m_stage.GetSolids())

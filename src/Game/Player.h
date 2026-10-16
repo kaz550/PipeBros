@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Aabb.h"
 #include "StageData.h"
+#include "StageRenderer.h"
 
 class Input;
 
@@ -59,8 +60,9 @@ private:
     bool m_facingLeft = false;
 
     StageData m_stage;
+    StageRenderer m_stageRenderer;
     int m_lastBumpedObjectId = -1;
-    bool m_showStageDebug = true;
+    bool m_showStageDebug = false;
     bool m_prevDebugKey = false;
 
     int m_spriteSheet = -1, m_frameIndex = 0;
