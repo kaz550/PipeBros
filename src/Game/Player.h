@@ -10,7 +10,6 @@ public:
     Player();
     ~Player();
 
-    // 画像ハンドルの二重解放を防ぐ
     Player(const Player&) = delete;
     Player& operator=(const Player&) = delete;
 
@@ -24,53 +23,66 @@ public:
     float GetY() const { return m_y; }
     float GetWidth() const { return m_width; }
     float GetHeight() const { return m_height; }
+
+    float GetVelocityX() const { return m_vx; }
     float GetVelocityY() const { return m_vy; }
 
     bool IsGrounded() const { return m_isGrounded; }
     bool IsJumpHolding() const { return m_isJumpHolding; }
 
 private:
-    // スプライトシート内の各コマの情報
     struct SpriteFrame
     {
+        // スプライトシート内の切り出し範囲
         int x;
         int y;
         int width;
         int height;
 
-        // 切り出した画像の左上から見た描画基準点
+        // 切り出し範囲の左上から見た基準点
         float pivotX;
         float pivotY;
     };
 
+    enum class Animation
+    {
+        Idle,
+        Walk,
+        Run,
+        Jump
+    };
+
     bool LoadSprite_();
 
+    void HandleMove_();
     void HandleJump_(float dt);
     void ApplyGravity_(float dt);
     void UpdatePosition_(float dt);
     void ClampToGround_();
 
+    void UpdateAnimation_(float dt);
+    void ChangeAnimation_(Animation animation);
+
 private:
-    // 当たり判定の左上座標
+    // 当たり判定の左上位置
     float m_x = 0.0f;
     float m_y = 0.0f;
 
+    float m_vx = 0.0f;
     float m_vy = 0.0f;
 
-    // 当たり判定のサイズ。
-    // スプライトの切り出しサイズとは独立して管理する
+    // 画像の大きさとは独立した当たり判定
     float m_width = 40.0f;
     float m_height = 80.0f;
+
+    float m_walkSpeed = 220.0f;
+    float m_runSpeed = 360.0f;
 
     float m_gravity = 2200.0f;
     float m_jumpVelocity = -820.0f;
 
-    // ジャンプキーを離した際の上昇速度の倍率
     float m_lowJumpRate = 0.45f;
-
-    // ジャンプキーを押している間の重力倍率
     float m_jumpHoldGravityRate = 0.45f;
-
     float m_maxJumpHoldTime = 0.18f;
     float m_jumpHoldTimer = 0.0f;
 
@@ -80,16 +92,18 @@ private:
     bool m_isJumpHolding = false;
     bool m_prevJumpKey = false;
 
-    // スプライトシート
-    int m_spriteSheet = -1;
+    bool m_isRunning = false;
+    bool m_facingLeft = false;
 
-    // 表示するコマ番号
-    // アイドル：0～1
-    // 歩き：2～7
-    // 走り：8～13
-    // ジャンプ：14～19
+    int m_spriteSheet = -1;
     int m_frameIndex = 0;
 
-    // 全コマ共通の描画倍率
-    float m_spriteScale = 0.4f;
+    // アイドルの高さ約238pxを約80pxで表示
+    float m_spriteScale = 0.34f;
+
+    Animation m_animation = Animation::Idle;
+    float m_animationTimer = 0.0f;
+
+    float m_jumpPoseTimer = 0.0f;
+    float m_landingTimer = 0.0f;
 };

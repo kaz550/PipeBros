@@ -1,18 +1,17 @@
 #include "Player.h"
 #include "../Input/Input.h"
+#include "../Core/Config.h"
 #include "DxLib.h"
+
+#include <cmath>
 
 Player::Player()
 {
-    // ƒRƒ“ƒXƒgƒ‰ƒNƒ^‚Å‚Í‰æ‘œ‚ğ“Ç‚İ‚Ü‚È‚¢B
-    // DxLib‰Šú‰»Œã‚ÉŒÄ‚Î‚ê‚éReset()‚Å“Ç‚İ‚ŞB
+
 }
 
 Player::~Player()
 {
-    // App‚ÌI—¹‡‚É‚æ‚Á‚Ä‚ÍADxLib_End()‚ÌŒã‚É
-    // Player‚ª”jŠü‚³‚ê‚éê‡‚ª‚ ‚éB
-    // ‚»‚Ìê‡A‰æ‘œ‚ÍDxLib_End()‚Å‚·‚Å‚É‰ğ•ú‚³‚ê‚Ä‚¢‚éB
     if (m_spriteSheet != -1)
     {
         if (DxLib_IsInit() != 0)
@@ -26,7 +25,6 @@ Player::~Player()
 
 bool Player::LoadSprite_()
 {
-    // “Ç‚İ‚İÏ‚İ‚È‚çÄ—˜—p‚·‚é
     if (m_spriteSheet != -1)
     {
         return true;
@@ -44,27 +42,18 @@ bool Player::LoadSprite_()
         return false;
     }
 
-    int imageWidth = 0;
-    int imageHeight = 0;
+    int width = 0;
+    int height = 0;
 
-    if (GetGraphSize(
-        m_spriteSheet,
-        &imageWidth,
-        &imageHeight
-    ) == -1)
-    {
-        printfDx("Failed to get sprite sheet size.\n");
+    const bool valid =
+        GetGraphSize(m_spriteSheet, &width, &height) != -1
+        && width == 1402
+        && height == 1122;
 
-        DeleteGraph(m_spriteSheet);
-        m_spriteSheet = -1;
-        return false;
-    }
-
-    // Ø‚èo‚µÀ•W‚ÍA“Y•t‚³‚ê‚½1536~1024‰æ‘œ—p
-    if (imageWidth != 1536 || imageHeight != 1024)
+    if (!valid)
     {
         printfDx(
-            "pipe_bros.png must be 1536 x 1024 pixels.\n"
+            "pipe_bros.png must be 1402 x 1122 pixels.\n"
         );
 
         DeleteGraph(m_spriteSheet);
@@ -81,133 +70,104 @@ void Player::Reset(float x, float groundY)
 
     m_x = x;
     m_groundY = groundY;
-    m_y = m_groundY - m_height;
+    m_y = groundY - m_height;
+
+    m_vx = 0.0f;
     m_vy = 0.0f;
 
-    m_jumpHoldTimer = 0.0f;
     m_isGrounded = true;
     m_isJumpHolding = false;
-    m_prevJumpKey = false;
+    m_jumpHoldTimer = 0.0f;
 
-    // ¡‰ñ‚ÍƒAƒCƒhƒ‹1ƒRƒ}–Ú‚ğ•\¦
+    m_prevJumpKey =
+        CheckHitKey(KEY_INPUT_SPACE) != 0;
+
+    m_isRunning = false;
+    m_facingLeft = false;
+
+    m_animation = Animation::Idle;
+    m_animationTimer = 0.0f;
     m_frameIndex = 0;
+
+    m_jumpPoseTimer = 0.0f;
+    m_landingTimer = 0.0f;
 }
 
 void Player::Update(float dt, const Input& input)
 {
-    // Šù‘¶‚ÌƒCƒ“ƒ^[ƒtƒF[ƒX‚É‡‚í‚¹‚Äˆø”‚ğc‚·B
-    // ¡‰ñ‚ÌƒWƒƒƒ“ƒv“ü—Í‚ÍCheckHitKey()‚Åæ“¾‚·‚éB
     (void)input;
 
+    if (dt <= 0.0f)
+    {
+        return;
+    }
+
+    if (m_jumpPoseTimer > 0.0f)
+    {
+        m_jumpPoseTimer -= dt;
+    }
+
+    if (m_landingTimer > 0.0f)
+    {
+        m_landingTimer -= dt;
+    }
+
+    const bool wasGrounded = m_isGrounded;
+
+    HandleMove_();
     HandleJump_(dt);
     ApplyGravity_(dt);
     UpdatePosition_(dt);
     ClampToGround_();
-}
 
-void Player::Draw() const
-{
-    if (m_spriteSheet == -1)
+    if (!wasGrounded && m_isGrounded)
     {
-        return;
+        m_landingTimer = 0.08f;
+        m_jumpPoseTimer = 0.0f;
     }
 
-    // x, y, •, ‚‚³, Šî€“_X, Šî€“_Y
-    //
-    // “Y•t‚³‚ê‚½ƒXƒvƒ‰ƒCƒgƒV[ƒg‚É‡‚í‚¹‚Ä
-    // ŠeƒRƒ}‚ÌØ‚èo‚µ”ÍˆÍ‚ğŒÂ•Ê‚Éw’è‚·‚éB
-    //
-    // Šî€“_‚ÍAƒLƒƒƒ‰ƒNƒ^[‚Ì‰º’[’†‰›‚ğ‰Šú’l‚Æ‚·‚éB
-    // ƒ|[ƒY‚É‚æ‚é‰¡‚¸‚ê‚ÍpivotX‚Å’²®‚Å‚«‚éB
-    static const SpriteFrame frames[] =
-    {
-        // ƒAƒCƒhƒ‹F0`1
-        {  82,  57, 150, 202,  75.0f, 200.0f },
-        { 322,  55, 145, 204,  72.5f, 202.0f },
-
-        // •à‚«F2`7
-        {  71, 300, 170, 206,  85.0f, 204.0f },
-        { 335, 300, 139, 206,  69.5f, 204.0f },
-        { 573, 297, 170, 210,  85.0f, 208.0f },
-        { 814, 296, 165, 211,  82.5f, 209.0f },
-        {1067, 294, 147, 213,  73.5f, 211.0f },
-        {1308, 297, 161, 209,  80.5f, 207.0f },
-
-        // ‘–‚èF8`13
-        {  54, 545, 204, 202, 102.0f, 200.0f },
-        { 294, 540, 199, 203,  99.5f, 201.0f },
-        { 550, 544, 204, 199, 102.0f, 197.0f },
-        { 797, 546, 204, 204, 102.0f, 202.0f },
-        {1066, 547, 184, 200,  92.0f, 198.0f },
-        {1293, 539, 214, 204, 107.0f, 202.0f },
-
-        // ƒWƒƒƒ“ƒvF14`19
-        {  71, 823, 169, 173,  84.5f, 171.0f },
-        { 322, 771, 186, 225,  93.0f, 223.0f },
-        { 568, 757, 175, 232,  87.5f, 230.0f },
-        { 807, 768, 186, 192,  93.0f, 190.0f },
-        {1050, 778, 181, 212,  90.5f, 210.0f },
-        {1314, 823, 171, 173,  85.5f, 171.0f },
-    };
-
-    constexpr int frameCount =
-        static_cast<int>(
-            sizeof(frames) / sizeof(frames[0])
-            );
-
-    if (m_frameIndex < 0 ||
-        m_frameIndex >= frameCount)
-    {
-        return;
-    }
-
-    const SpriteFrame& frame = frames[m_frameIndex];
-
-    // “–‚½‚è”»’è‚Ì‘«Œ³’†‰›‚ğA•`‰æ‚ÌŠî€‚É‚·‚é
-    const float anchorX = m_x + m_width * 0.5f;
-    const float anchorY = m_y + m_height;
-
-    // ŠeƒRƒ}‚ÌŠî€“_‚ªanchor‚Éd‚È‚éˆÊ’u‚ğ‹‚ß‚é
-    const float left =
-        anchorX - frame.pivotX * m_spriteScale;
-
-    const float top =
-        anchorY - frame.pivotY * m_spriteScale;
-
-    const float right =
-        left + frame.width * m_spriteScale;
-
-    const float bottom =
-        top + frame.height * m_spriteScale;
-
-    DrawRectExtendGraph(
-        static_cast<int>(left),
-        static_cast<int>(top),
-        static_cast<int>(right),
-        static_cast<int>(bottom),
-        frame.x,
-        frame.y,
-        frame.width,
-        frame.height,
-        m_spriteSheet,
-        TRUE
-    );
+    UpdateAnimation_(dt);
 }
 
-Aabb Player::GetAabb() const
+void Player::HandleMove_()
 {
-    Aabb aabb;
+    const bool left =
+        CheckHitKey(KEY_INPUT_LEFT) != 0;
 
-    // Œ©‚½–Ú‚æ‚è­‚µ¬‚³‚­‚·‚é
-    const float marginX = 4.0f;
-    const float marginY = 4.0f;
+    const bool right =
+        CheckHitKey(KEY_INPUT_RIGHT) != 0;
 
-    aabb.l = m_x + marginX;
-    aabb.t = m_y + marginY;
-    aabb.r = m_x + m_width - marginX;
-    aabb.b = m_y + m_height - marginY;
+    const bool shift =
+        CheckHitKey(KEY_INPUT_LSHIFT) != 0 ||
+        CheckHitKey(KEY_INPUT_RSHIFT) != 0;
 
-    return aabb;
+    int direction = 0;
+
+    if (left)
+    {
+        --direction;
+    }
+
+    if (right)
+    {
+        ++direction;
+    }
+
+    m_isRunning = shift && direction != 0;
+
+    const float speed =
+        m_isRunning ? m_runSpeed : m_walkSpeed;
+
+    m_vx = direction * speed;
+
+    if (direction < 0)
+    {
+        m_facingLeft = true;
+    }
+    else if (direction > 0)
+    {
+        m_facingLeft = false;
+    }
 }
 
 void Player::HandleJump_(float dt)
@@ -215,22 +175,24 @@ void Player::HandleJump_(float dt)
     const bool jumpKey =
         CheckHitKey(KEY_INPUT_SPACE) != 0;
 
-    const bool jumpPressed =
+    const bool pressed =
         jumpKey && !m_prevJumpKey;
 
-    const bool jumpReleased =
+    const bool released =
         !jumpKey && m_prevJumpKey;
 
-    // Ú’n’†‚É‰Ÿ‚µ‚½uŠÔ‚¾‚¯ƒWƒƒƒ“ƒv‚·‚é
-    if (m_isGrounded && jumpPressed)
+    if (m_isGrounded && pressed)
     {
         m_vy = m_jumpVelocity;
+
         m_isGrounded = false;
         m_isJumpHolding = true;
         m_jumpHoldTimer = 0.0f;
+
+        m_jumpPoseTimer = 0.04f;
+        m_landingTimer = 0.0f;
     }
 
-    // ‰Ÿ‚µ‘±‚¯‚Ä‚¢‚éŠÔ‚Ìˆ—
     if (m_isJumpHolding)
     {
         m_jumpHoldTimer += dt;
@@ -243,8 +205,7 @@ void Player::HandleJump_(float dt)
         }
     }
 
-    // ã¸’†‚É—£‚µ‚½‚çAã¸‘¬“x‚ğã‚ß‚é
-    if (jumpReleased && m_vy < 0.0f)
+    if (released && m_vy < 0.0f)
     {
         m_vy *= m_lowJumpRate;
         m_isJumpHolding = false;
@@ -272,14 +233,29 @@ void Player::ApplyGravity_(float dt)
 
 void Player::UpdatePosition_(float dt)
 {
+    m_x += m_vx * dt;
     m_y += m_vy * dt;
+
+    float centerX = m_x + m_width * 0.5f;
+
+    while (centerX < 0.0f)
+    {
+        m_x += static_cast<float>(SCREEN_W);
+        centerX += static_cast<float>(SCREEN_W);
+    }
+
+    while (centerX >= static_cast<float>(SCREEN_W))
+    {
+        m_x -= static_cast<float>(SCREEN_W);
+        centerX -= static_cast<float>(SCREEN_W);
+    }
 }
 
 void Player::ClampToGround_()
 {
     const float footY = m_y + m_height;
 
-    if (footY >= m_groundY)
+    if (m_vy >= 0.0f && footY >= m_groundY)
     {
         m_y = m_groundY - m_height;
         m_vy = 0.0f;
@@ -292,4 +268,215 @@ void Player::ClampToGround_()
     {
         m_isGrounded = false;
     }
+}
+
+void Player::ChangeAnimation_(Animation animation)
+{
+    if (m_animation == animation)
+    {
+        return;
+    }
+
+    m_animation = animation;
+    m_animationTimer = 0.0f;
+}
+
+void Player::UpdateAnimation_(float dt)
+{
+    if (!m_isGrounded)
+    {
+        ChangeAnimation_(Animation::Jump);
+
+        if (m_jumpPoseTimer > 0.0f)
+        {
+            m_frameIndex = 8;
+        }
+        else if (m_vy < -120.0f)
+        {
+            m_frameIndex = 9;
+        }
+        else if (m_vy < 120.0f)
+        {
+            m_frameIndex = 10;
+        }
+        else
+        {
+            m_frameIndex = 11;
+        }
+
+        return;
+    }
+
+    if (m_landingTimer > 0.0f)
+    {
+        ChangeAnimation_(Animation::Jump);
+        m_frameIndex = 12;
+        return;
+    }
+
+    const bool moving = std::fabs(m_vx) > 0.01f;
+
+    const Animation next =
+        !moving ? Animation::Idle :
+        m_isRunning ? Animation::Run :
+        Animation::Walk;
+
+    ChangeAnimation_(next);
+
+    int firstFrame = 0;
+    int frameCount = 2;
+    float frameDuration = 0.40f;
+
+    if (m_animation == Animation::Walk)
+    {
+        firstFrame = 2;
+        frameCount = 4;
+        frameDuration = 0.12f;
+    }
+    else if (m_animation == Animation::Run)
+    {
+        firstFrame = 5;
+        frameCount = 4;
+        frameDuration = 0.075f;
+    }
+
+    const float cycleDuration =
+        frameDuration * frameCount;
+
+    m_animationTimer =
+        std::fmod(m_animationTimer + dt, cycleDuration);
+
+    const int localFrame =
+        static_cast<int>(m_animationTimer / frameDuration);
+
+    // $BJb$-!&Av$j$O(B3$BKg$r!V(B1 $B"*(B 2 $B"*(B 3 $B"*(B 2$B!W$G:F@8$9$k!#(B
+    // frameCount$B$N(B4$B$O2hA|Kg?t$G$O$J$/:F@8%9%F%C%W?t!#(B
+    m_frameIndex = firstFrame
+        + (moving && localFrame == 3 ? 1 : localFrame);
+}
+
+void Player::Draw() const
+{
+    if (m_spriteSheet == -1)
+    {
+        return;
+    }
+
+    // $B:G?7$N(B1402$B!_(B1122$B%T%/%;%k$N%7!<%HMQ!#(B
+    //
+    // x, y, $BI}(B, $B9b$5(B, $B4p=`E@(BX, $B4p=`E@(BY
+    //
+    // $B4p=`E@$O@Z$j=P$72hA|$N:8>e$+$i$NAjBP:BI8!#(B
+    // $B4p=`E@(BY$B$O2hA|30$KCV$/$3$H$b$G$-$k!#(B
+    // $BAv$j$N6uCf;Q@*$G$O7$Dl$h$j2<$KCV$-!"(B
+    // $B%-%c%i%/%?!<$rCOLL$+$i>/$7Ib$+$;$k!#(B
+    static const SpriteFrame frames[] =
+    {
+        // $B%"%$%I%k!'(B0$B!A(B1
+        {  68,  50, 189, 241,  97.0f, 239.0f },
+        { 336,  50, 188, 241,  97.0f, 239.0f },
+
+        // $BJb$-!'(B2$B!A(B4$B!J(B3$B%3%^!K(B
+        {  54, 308, 209, 259, 111.0f, 257.0f },
+        { 339, 308, 187, 259,  96.0f, 257.0f },
+        { 598, 308, 205, 259, 107.0f, 257.0f },
+
+        // $BAv$j!'(B5$B!A(B7$B!J(B3$B%3%^!K(B
+        {  29, 577, 250, 260, 136.0f, 258.0f },
+        { 326, 577, 215, 260, 109.0f, 258.0f },
+        { 562, 577, 254, 260, 143.0f, 258.0f },
+
+        // $B%8%c%s%W!'(B8$B!A(B12$B!J(B5$B%3%^!K(B
+        {  59, 882, 201, 213, 101.0f, 211.0f },
+        { 321, 837, 226, 258, 113.0f, 256.0f },
+        { 585, 837, 223, 229, 112.0f, 227.0f },
+        { 842, 837, 236, 268, 118.0f, 266.0f },
+        {1148, 883, 205, 212, 103.0f, 210.0f },
+    };
+
+    const int frameCount =
+        static_cast<int>(sizeof(frames) / sizeof(frames[0]));
+
+    if (m_frameIndex < 0 || m_frameIndex >= frameCount)
+    {
+        return;
+    }
+
+    const SpriteFrame& frame = frames[m_frameIndex];
+
+    const float anchorX = m_x + m_width * 0.5f;
+    const float anchorY = m_y + m_height;
+
+    // DxLib$B$XEO$92sE>Cf?4$H!"0LCV7W;;$K;H$&Cf?4$rB7$($k(B
+    const int sourceCenterX = frame.width / 2;
+    const int sourceCenterY = frame.height / 2;
+
+    const float centerOffsetX =
+        (sourceCenterX - frame.pivotX)
+        * m_spriteScale;
+
+    const float centerOffsetY =
+        (sourceCenterY - frame.pivotY)
+        * m_spriteScale;
+
+    const auto drawAt = [&](float x)
+        {
+            const float drawCenterX =
+                x + (m_facingLeft
+                    ? -centerOffsetX
+                    : centerOffsetX);
+
+            const float drawCenterY =
+                anchorY + centerOffsetY;
+
+            DrawRectRotaGraph3(
+                static_cast<int>(drawCenterX),
+                static_cast<int>(drawCenterY),
+                frame.x,
+                frame.y,
+                frame.width,
+                frame.height,
+                sourceCenterX,
+                sourceCenterY,
+                m_spriteScale,
+                m_spriteScale,
+                0.0,
+                m_spriteSheet,
+                TRUE,
+                m_facingLeft ? TRUE : FALSE
+            );
+        };
+
+    drawAt(anchorX);
+
+    const float extentX =
+        (frame.pivotX > frame.width - frame.pivotX
+            ? frame.pivotX
+            : frame.width - frame.pivotX)
+        * m_spriteScale;
+
+    if (anchorX - extentX < 0.0f)
+    {
+        drawAt(anchorX + SCREEN_W);
+    }
+
+    if (anchorX + extentX > SCREEN_W)
+    {
+        drawAt(anchorX - SCREEN_W);
+    }
+}
+
+Aabb Player::GetAabb() const
+{
+    Aabb aabb;
+
+    const float marginX = 4.0f;
+    const float marginY = 4.0f;
+
+    aabb.l = m_x + marginX;
+    aabb.t = m_y + marginY;
+    aabb.r = m_x + m_width - marginX;
+    aabb.b = m_y + m_height - marginY;
+
+    return aabb;
 }
