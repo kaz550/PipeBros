@@ -6,8 +6,58 @@ Player::Player()
 {
 }
 
+Player::~Player() 
+{
+    if (m_spriteSheet != -1) 
+    {
+        if (DxLib_IsInit() != 0) 
+        {
+            // 後で追加する
+        }
+        m_spriteSheet = -1;
+    }
+    
+}
+bool Player::LoadSprite_()
+{
+    if (m_spriteSheet != -1)
+    {
+        return true;
+    }
+    m_spriteSheet = LoadGraph(
+        "assets/images/pipe_bros.png"
+    );
+    if (m_spriteSheet == -1)
+    {
+        printfDx(
+            "Failed to Load: assets/images/pipe_bros.png\n"
+        );
+        return false;
+    }
+    int imageWidth = 0;
+    int imageHeight = 0;
+    if (GetGraphSize(m_spriteSheet, &imageWidth, &imageHeight) == -1)
+    {
+        printfDx("Failed to get sprite sheet size\n");
+        DeleteGraph(m_spriteSheet);
+        m_spriteSheet = -1;
+        return false;
+    }
+
+    if (imageWidth != 1536 || imageHeight != 1024)
+    {
+        printfDx("pipe_bros.png must be 1536 x 1024 pixels.\n");
+        DeleteGraph(m_spriteSheet);
+        m_spriteSheet = -1;
+        return false;
+    }
+
+    return true;
+}
 void Player::Reset(float x, float groundY)
 {
+    LoadSprite_();
+
     m_x = x;
     m_groundY = groundY;
     m_y = m_groundY - m_height;
@@ -17,10 +67,15 @@ void Player::Reset(float x, float groundY)
     m_isGrounded = true;
     m_isJumpHolding = false;
     m_prevJumpKey = false;
+
+    //スプライト表示テスト
+    m_frameIndex = 0;
 }
 
 void Player::Update(float dt, const Input& input)
 {
+    (void)input;
+
     HandleJump_(dt);
     ApplyGravity_(dt);
     UpdatePosition_(dt);
@@ -29,13 +84,55 @@ void Player::Update(float dt, const Input& input)
 
 void Player::Draw() const
 {
-    const int left = static_cast<int>(m_x);
-    const int top = static_cast<int>(m_y);
-    const int right = static_cast<int>(m_x + m_width);
-    const int bottom = static_cast<int>(m_y + m_height);
+    if (m_spriteSheet == -1)
+    {
+        return;
+    }
 
-    DrawBox(left, top, right, bottom, GetColor(255, 80, 80), TRUE);
-    DrawBox(left + 8, top + 8, right - 8, top + 18, GetColor(255, 220, 220), TRUE);
+    static const SpriteFrame frames[] =
+    {
+        { 82, 57, 150, 202, 75.0f, 200.0f},
+        {322, 55, 145, 204, 72.5f, 202.0f},
+    };
+
+    constexpr int frameCount =
+        static_cast<int>(
+            sizeof(frames) / sizeof(frames[0])
+            );
+    if (m_frameIndex < 0 || m_frameIndex >= frameCount)
+    {
+        return;
+    }
+    const SpriteFrame& frame = frames[m_frameIndex];
+
+    const float anchorX = m_x + m_width * 0.5f;
+    const float anchorY = m_y + m_height;
+
+    
+
+    const float left = 
+        anchorX - frame.pivotX * m_spriteScale;
+    const float top =
+        anchorY - frame.pivotY * m_spriteScale;
+    const float right =
+        left + frame.width * m_spriteScale;
+    const float bottom =
+        top + frame.height * m_spriteScale;
+
+    DrawRectExtendGraph(
+        static_cast<int>(left),
+        static_cast<int>(top),
+        static_cast<int>(right),
+        static_cast<int>(bottom),
+        frame.x,
+        frame.y,
+        frame.width,
+        frame.height,
+        m_spriteSheet,
+        TRUE
+    );
+    //DrawBox(left, top, right, bottom, GetColor(255, 80, 80), TRUE);
+    //DrawBox(left + 8, top + 8, right - 8, top + 18, GetColor(255, 220, 220), TRUE);
 }
 
 Aabb Player::GetAabb() const

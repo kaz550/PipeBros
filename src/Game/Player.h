@@ -7,6 +7,11 @@ class Player
 {
 public:
     Player();
+    ~Player();
+
+    //‰æ‘œƒnƒ“ƒhƒ‹‚Ì“ñd‰ğ•ú‚ğ–h‚®
+    Player(const Player&) = delete;
+    Player& operator=(const Player&) = delete;
 
     void Reset(float x, float groundY);
     void Update(float dt, const Input& input);
@@ -23,6 +28,21 @@ public:
     bool IsJumpHolding() const { return m_isJumpHolding; }
 
 private:
+
+    struct  SpriteFrame
+    {
+        int x;
+        int y;
+        int width;
+        int height;
+
+        float pivotX;
+        float pivotY;
+
+    };
+
+    bool LoadSprite_();
+
     void HandleJump_(float dt);
     void ApplyGravity_(float dt);
     void UpdatePosition_(float dt);
@@ -49,4 +69,9 @@ private:
     bool m_isGrounded = false;
     bool m_isJumpHolding = false;
     bool m_prevJumpKey = false;
+
+    int m_spriteSheet = -1;
+    int m_frameIndex = 0;
+    float m_spriteScale = 0.4f;
+
 };
