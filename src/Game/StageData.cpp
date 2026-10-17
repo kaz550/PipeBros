@@ -28,6 +28,7 @@ bool StageData::Load(const char* filename)
         return false;
     }
 
+    bool hasRespawn = false;
     bool hasPlayer = false;
     bool hasGround = false;
     for (const tinyxml2::XMLElement* group = map->FirstChildElement("objectgroup");
@@ -101,6 +102,20 @@ bool StageData::Load(const char* filename)
                     else m_enemySpawns.push_back(spawn);
                     continue;
                 }
+                if ((objectType && std::strcmp(objectType, "PlayerRespawn") == 0)
+                    || (name && std::strcmp(name, "PlayerRespawn") == 0))
+                {
+                    if (hasRespawn || !object->FirstChildElement("point")
+                        || object->QueryFloatAttribute("x", &m_playerRespawnCenterX) != tinyxml2::XML_SUCCESS
+                        || object->QueryFloatAttribute("y", &m_playerRespawnFootY) != tinyxml2::XML_SUCCESS
+                        || !std::isfinite(m_playerRespawnCenterX) || !std::isfinite(m_playerRespawnFootY))
+                    {
+                        m_error = "PlayerRespawn must be a single point with valid x/y coordinates.";
+                        return false;
+                    }
+                    hasRespawn = true;
+                    continue;
+                }
                 if (!name || std::strcmp(name, "Player1") != 0) continue;
                 if (hasPlayer || !object->FirstChildElement("point")
                     || object->QueryFloatAttribute("x", &m_playerX) != tinyxml2::XML_SUCCESS
@@ -154,6 +169,12 @@ bool StageData::Load(const char* filename)
     {
         m_error = "Missing Spawns/Player1 or Collisions/Ground.";
         return false;
+    }
+    if (!hasRespawn)
+    {
+        // 追加ポイントがない既存マップでも、下段中央に再出現する。
+        m_playerRespawnCenterX = SCREEN_W * 0.5f;
+        m_playerRespawnFootY = m_groundY;
     }
     m_loaded = true;
     return true;

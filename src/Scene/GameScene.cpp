@@ -114,7 +114,21 @@ void GameScene::Update(float dt, const Input& input)
 
 void GameScene::Draw()
 {
-    m_player.Draw();
+    int playerAlpha = 255;
+    if (m_invulnerabilityTimer > 0.0f)
+    {
+        playerAlpha = 128;
+        // 無敵2秒のうち、最後の0.6秒は0.075秒ごとに半透明／非表示を切り替える。
+        const float blinkDuration = 0.6f;
+        const float blinkInterval = 0.075f;
+        if (m_invulnerabilityTimer <= blinkDuration)
+        {
+            const float blinkTime = blinkDuration - m_invulnerabilityTimer;
+            const int phase = static_cast<int>(blinkTime / blinkInterval);
+            if (phase % 2 != 0) playerAlpha = 0;
+        }
+    }
+    m_player.Draw(playerAlpha);
     m_enemyManager.Draw();
     const unsigned int white = GetColor(255, 255, 255);
     DrawFormatString(24, 16, white, "SCORE: %06d   LIVES: %d   STAGE: 1 / 1",

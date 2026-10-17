@@ -39,6 +39,9 @@ public:
     const std::vector<StageEnemyExit>& GetEnemyExits() const { return m_enemyExits; }
     float GetPlayerX() const { return m_playerX; }
     float GetPlayerFootY() const { return m_playerFootY; }
+    // 再出現ポイントは横方向の中心と足元の座標。
+    float GetPlayerRespawnCenterX() const { return m_playerRespawnCenterX; }
+    float GetPlayerRespawnFootY() const { return m_playerRespawnFootY; }
     float GetGroundY() const { return m_groundY; }
 
     // dt内の移動を上面・下面・側面との交差で判定する。
@@ -55,6 +58,8 @@ private:
     float m_playerX = 220.0f;
     float m_playerFootY = 620.0f;
     float m_groundY = 620.0f;
+    float m_playerRespawnCenterX = 640.0f;
+    float m_playerRespawnFootY = 620.0f;
     bool m_loaded = false;
 };
 

@@ -88,8 +88,11 @@ void Player::Reset(float x, float groundY)
         m_y = m_stage.GetPlayerFootY() - m_height;
         m_groundY = m_stage.GetGroundY();
     }
-    m_respawnX = m_x;
-    m_respawnFootY = m_y + m_height;
+    // 初回位置とミス後の再出現位置を分ける。TMXのXは再出現時の中心。
+    m_respawnX = stageLoaded
+        ? m_stage.GetPlayerRespawnCenterX() - m_width * 0.5f
+        : (SCREEN_W - m_width) * 0.5f;
+    m_respawnFootY = stageLoaded ? m_stage.GetPlayerRespawnFootY() : groundY;
     m_lastBumpedObjectId = -1;
     m_showStageDebug = !stageImagesLoaded;
     m_prevDebugKey = CheckHitKey(KEY_INPUT_F3) != 0;
@@ -123,7 +126,7 @@ void Player::UpdateVisualEffects(float dt)
 
 void Player::Respawn()
 {
-    // 画像やTMXを再読み込みせず、プレイヤーだけを開始位置へ戻す。
+    // 画像やTMXを再読み込みせず、プレイヤーだけを再出現ポイントへ戻す。
     m_x = m_respawnX;
     m_y = m_respawnFootY - m_height;
     m_vx = m_vy = 0.0f;
@@ -442,7 +445,7 @@ void Player::UpdateAnimation_(float dt)
         + (moving && localFrame == 3 ? 1 : localFrame);
 }
 
-void Player::Draw() const
+void Player::Draw(int alpha) const
 {
     m_stageRenderer.Draw();
 
@@ -461,7 +464,7 @@ void Player::Draw() const
         }
         DrawString(20, 150, "F3: COLLISION DEBUG", GetColor(80, 220, 160));
     }
-    if (m_spriteSheet == -1)
+    if (m_spriteSheet == -1 || alpha <= 0)
     {
         return;
     }
@@ -551,6 +554,12 @@ void Player::Draw() const
         );
     };
 
+    // プレイヤーだけに適用し、画面端の複製も同じ透明度で描く。
+    int previousBlendMode = DX_BLENDMODE_NOBLEND;
+    int previousBlendParam = 0;
+    GetDrawBlendMode(&previousBlendMode, &previousBlendParam);
+    if (alpha > 255) alpha = 255;
+    SetDrawBlendMode(DX_BLENDMODE_ALPHA, alpha);
     drawAt(anchorX);
 
     const float extentX =
@@ -568,6 +577,8 @@ void Player::Draw() const
     {
         drawAt(anchorX - SCREEN_W);
     }
+    // 続いて描く敵やHUDに透明度が残らないよう元の設定に戻す。
+    SetDrawBlendMode(previousBlendMode, previousBlendParam);
 }
 
 Aabb Player::GetAabb() const

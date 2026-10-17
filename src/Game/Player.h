@@ -15,7 +15,8 @@ public:
 
     void Reset(float x, float groundY);
     void Update(float dt, const Input& input);
-    void Draw() const;
+    // alpha: 0なら非表示、255なら通常表示。ステージには適用しない。
+    void Draw(int alpha = 255) const;
     void Respawn();
     void UpdateVisualEffects(float dt);
     Aabb GetAabb() const;
