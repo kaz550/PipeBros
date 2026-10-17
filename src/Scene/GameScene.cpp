@@ -11,6 +11,15 @@ GameScene::GameScene(SceneManager* mgr)
 {
 }
 
+float GameScene::GetStageTimeLimit_(int stageNumber)
+{
+    // 現在はすべて通常ステージなので制限なし。
+    // ボーナスステージ追加時は、その番号だけ制限秒数を返す。
+    // 例：if (stageNumber == 3) return 20.0f;
+    (void)stageNumber;
+    return 0.0f;
+}
+
 void GameScene::Enter()
 {
     m_player.Reset(PLAYER_START_X, GROUND_Y);
@@ -20,7 +29,8 @@ void GameScene::Enter()
     m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_lives = INITIAL_LIVES;
     m_score = m_hitCount = m_stageStartScore = 0;
-    m_remainingTime = STAGE_TIME_LIMIT;
+    m_stageTimeLimit = GetStageTimeLimit_(m_stageNumber);
+    m_remainingTime = m_stageTimeLimit;
     m_prevRestartKey = CheckHitKey(KEY_INPUT_R) != 0;
     m_isFinished = m_isClear = m_resultRequested = false;
     if (m_mgr)
@@ -43,7 +53,8 @@ void GameScene::RestartStage_()
     m_stageStartScore = m_score;
     m_player.Reset(PLAYER_START_X, GROUND_Y);
     m_enemyManager.Reset(m_player.GetStageData());
-    m_remainingTime = STAGE_TIME_LIMIT;
+    m_stageTimeLimit = GetStageTimeLimit_(m_stageNumber);
+    m_remainingTime = m_stageTimeLimit;
     m_invulnerabilityTimer = 0.0f;
     m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_finishTimer = 0.0f;
@@ -115,24 +126,32 @@ void GameScene::Update(float dt, const Input& input)
         return;
     }
 
-    // タイムアップを先に確定し、同じフレームの接触で二重に残機を減らさない。
-    const float playDt = dt < m_remainingTime ? dt : m_remainingTime;
-    m_elapsedTime += playDt;
-    m_remainingTime = m_remainingTime > dt ? m_remainingTime - dt : 0.0f;
-    if (m_remainingTime <= 0.0f)
+    if (m_stageTimeLimit > 0.0f)
     {
-        ++m_hitCount;
-        --m_lives;
-        if (m_lives <= 0)
+        // タイムアップを先に確定し、同じフレームの接触で二重に残機を減らさない。
+        const float playDt = dt < m_remainingTime ? dt : m_remainingTime;
+        m_elapsedTime += playDt;
+        m_remainingTime = m_remainingTime > dt ? m_remainingTime - dt : 0.0f;
+        if (m_remainingTime <= 0.0f)
         {
-            m_lives = 0;
-            Finish_(false);
+            ++m_hitCount;
+            --m_lives;
+            if (m_lives <= 0)
+            {
+                m_lives = 0;
+                Finish_(false);
+            }
+            else
+            {
+                RestartStage_();
+            }
+            return;
         }
-        else
-        {
-            RestartStage_();
-        }
-        return;
+    }
+    else
+    {
+        // 通常ステージは経過時間の記録のみ。タイムアップは発生しない。
+        m_elapsedTime += dt;
     }
     m_invulnerabilityTimer = m_invulnerabilityTimer > dt
         ? m_invulnerabilityTimer - dt : 0.0f;
@@ -187,13 +206,16 @@ void GameScene::Draw()
     const unsigned int white = GetColor(255, 255, 255);
     DrawFormatString(24, 16, white, "SCORE: %06d   LIVES: %d", m_score, m_lives);
     DrawFormatString(SCREEN_W - 180, 16, white, "STAGE %02d", m_stageNumber);
-    const int seconds = static_cast<int>(std::ceil(m_remainingTime));
-    char timeText[32];
-    const int textLength = std::snprintf(timeText, sizeof(timeText), "TIME %03d", seconds);
-    const int textWidth = GetDrawStringWidth(timeText, textLength);
-    const unsigned int timeColor = m_remainingTime <= 10.0f
-        ? GetColor(255, 80, 80) : white;
-    DrawString((SCREEN_W - textWidth) / 2, 16, timeText, timeColor);
+    if (m_stageTimeLimit > 0.0f)
+    {
+        const int seconds = static_cast<int>(std::ceil(m_remainingTime));
+        char timeText[32];
+        const int textLength = std::snprintf(timeText, sizeof(timeText), "TIME %03d", seconds);
+        const int textWidth = GetDrawStringWidth(timeText, textLength);
+        const unsigned int timeColor = m_remainingTime <= 10.0f
+            ? GetColor(255, 80, 80) : white;
+        DrawString((SCREEN_W - textWidth) / 2, 16, timeText, timeColor);
+    }
     DrawFormatString(24, 44, white, "DEFEATED: %d / %d   INVUL: %.1f",
         m_enemyManager.GetDefeatedCount(), m_enemyManager.GetTotalCount(),
         m_invulnerabilityTimer);
