@@ -215,8 +215,17 @@ void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
             if (centerX + turtle.width * 0.5f <= solid.x
                 || centerX - turtle.width * 0.5f >= solid.x + solid.width
                 || std::fabs(centerX - hitX) > 80.0f) continue;
-            turtle.state = State::Overturned;
-            turtle.stateTime = 6.0f;
+            // 通常時は転倒、転倒・復帰中ならもう一度叩くと通常状態へ戻す。
+            if (turtle.state == State::Walking)
+            {
+                turtle.state = State::Overturned;
+                turtle.stateTime = 6.0f;
+            }
+            else
+            {
+                turtle.state = State::Walking;
+                turtle.stateTime = 0.0f;
+            }
             turtle.animationTime = 0.0f;
             turtle.vx = 0.0f;
             turtle.vy = -220.0f;
