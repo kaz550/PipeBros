@@ -17,6 +17,7 @@ public:
     void Update(float dt, const Input& input);
     void Draw() const;
     void Respawn();
+    void UpdateVisualEffects(float dt);
     Aabb GetAabb() const;
     const StageData& GetStageData() const { return m_stage; }
 

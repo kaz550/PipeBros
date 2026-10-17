@@ -1,88 +1,78 @@
-#include "ResultScene.h"
+﻿#include "ResultScene.h"
 #include "SceneManager.h"
-#include "SceneType.h"
-
 #include "../Input/Input.h"
 #include "../Audio/Audio.h"
-#include "../Core/Config.h"
 #include "../Game/Score.h"
-#include "../Core/Quality.h"
-
 #include "DxLib.h"
-#include <cstdio>
-
-static const char* ResultTitle_(ResultKind k)
-{
-	switch (k)
-	{
-	case ResultKind::GameOver:   return "GAME OVER";
-	case ResultKind::StageClear: return "STAGE CLEAR";
-	case ResultKind::AllClear:   return "ALL CLEAR";
-	default:                     return "RESULT";
-	}
-}
+#include <cmath>
 
 void ResultScene::Enter()
 {
-	m_isNew = false;
-
-	const float score = m_mgr->Context().lastScore;
-	if (score > m_mgr->Context().hiScore)
-	{
-		m_mgr->Context().hiScore = score;
-		Score::SaveHiScore("hiscore.dat", m_mgr->Context().hiScore);
-		m_isNew = true;
-	}
+    m_isNew = m_saveFailed = false;
+    m_waitDecideRelease = true;
+    m_prevTitleKey = CheckHitKey(KEY_INPUT_T) != 0;
+    m_inputLockTimer = 0.25f;
+    if (!m_background.Load("assets/stages/stage01.tmx"))
+        printfDx("Result background load failed: %s\n", m_background.GetError().c_str());
+    if (!m_mgr) return;
+    SceneContext& context = m_mgr->Context();
+    context.lastScore = Score::ClampScore(context.lastScore);
+    if (context.lastScore > context.hiScore)
+    {
+        context.hiScore = context.lastScore;
+        m_saveFailed = !Score::SaveHiScore("hiscore.dat", context.hiScore);
+        m_isNew = true;
+    }
 }
 
-void ResultScene::Update(float, const Input& input)
+void ResultScene::Update(float dt, const Input& input)
 {
-	if (input.Triggered(Action::ToggleFps))
-		m_mgr->Context().showFps = !m_mgr->Context().showFps;
+    if (!m_mgr || !std::isfinite(dt) || dt <= 0.0f) return;
+    if (input.Triggered(Action::ToggleFps))
+        m_mgr->Context().showFps = !m_mgr->Context().showFps;
+    if (input.Triggered(Action::ForceLow))
+        m_mgr->Context().quality = QualityLevel::Low;
 
-	if (input.Triggered(Action::ForceLow))
-		m_mgr->Context().quality = QualityLevel::Low;
-
-	if (input.Triggered(Action::Decide))
-	{
-		Audio::Instance().PlaySe("decide");
-		m_mgr->RequestChange(SceneType::Game);
-		return;
-	}
-
-	if (input.Triggered(Action::Back))
-	{
-		Audio::Instance().PlaySe("back");
-		m_mgr->RequestChange(SceneType::Title);
-		return;
-	}
+    const bool titleKey = CheckHitKey(KEY_INPUT_T) != 0;
+    const bool titlePressed = titleKey && !m_prevTitleKey;
+    m_prevTitleKey = titleKey;
+    if (!input.Pressed(Action::Decide)) m_waitDecideRelease = false;
+    m_inputLockTimer = m_inputLockTimer > dt ? m_inputLockTimer - dt : 0.0f;
+    if (m_inputLockTimer > 0.0f) return;
+    if (titlePressed || input.Triggered(Action::Back))
+    {
+        Audio::Instance().PlaySe("back");
+        m_mgr->RequestChange(SceneType::Title);
+        return;
+    }
+    if (!m_waitDecideRelease && input.Triggered(Action::Decide))
+    {
+        Audio::Instance().PlaySe("decide");
+        m_mgr->RequestChange(SceneType::Game);
+    }
 }
 
 void ResultScene::Draw()
 {
-	DrawBox(0, 0, SCREEN_W, SCREEN_H, GetColor(12, 8, 8), TRUE);
-
-	const int white = GetColor(240, 240, 240);
-	const int gray = GetColor(180, 180, 180);
-	const int gold = GetColor(255, 240, 160);
-
-	DrawString(40, 40, ResultTitle_(m_mgr->Context().resultKind), white);
-
-	DrawString(40, 90, "Decide: Next (-> Game)", gray);
-	DrawString(40, 120, "Back  : Title (-> Title)", gray);
-
-	char buf[128];
-	std::snprintf(buf, sizeof(buf), "SCORE: %.0f", m_mgr->Context().lastScore);
-	DrawString(40, 200, buf, white);
-
-	std::snprintf(buf, sizeof(buf), "HI-SCORE: %.0f", m_mgr->Context().hiScore);
-	DrawString(40, 240, buf, white);
-
-	std::snprintf(buf, sizeof(buf), "NEXT STAGE: %d / %d", m_mgr->Context().stageIndex + 1, m_mgr->Context().stageCount);
-	DrawString(40, 280, buf, gray);
-
-
-
-	if (m_isNew)
-		DrawString(40, 330, "NEW RECORD!", gold);
+    m_background.Draw();
+    if (!m_mgr) return;
+    const SceneContext& context = m_mgr->Context();
+    const unsigned int white = GetColor(255, 255, 255);
+    const unsigned int gold = GetColor(255, 230, 120);
+    const char* title = "RESULT";
+    if (context.resultKind == ResultKind::StageClear) title = "STAGE CLEAR";
+    else if (context.resultKind == ResultKind::GameOver) title = "GAME OVER";
+    else if (context.resultKind == ResultKind::AllClear) title = "ALL CLEAR";
+    DrawString(514, 220, title, GetColor(0, 0, 0));
+    DrawString(512, 218, title, gold);
+    DrawFormatString(512, 250, white, "SCORE:    %.0f", context.lastScore);
+    DrawFormatString(512, 278, white, "HI-SCORE: %.0f", context.hiScore);
+    DrawFormatString(512, 362, white, "LIVES LEFT: %d", context.lastLives);
+    DrawFormatString(512, 390, white, "DEFEATED:   %d / %d", context.lastDefeated, context.lastEnemyCount);
+    DrawFormatString(512, 418, white, "TIME:       %.1f SEC", context.lastPlayTime);
+    if (m_isNew) DrawString(512, 522, "NEW RECORD!", gold);
+    DrawString(448, 554, "ENTER / SPACE: RETRY", white);
+    DrawString(448, 582, "T: TITLE   /   ESC: QUIT", white);
+    if (m_saveFailed)
+        DrawString(24, 108, "HI-SCORE SAVE FAILED", GetColor(255, 150, 120));
 }

@@ -115,6 +115,12 @@ void Player::Reset(float x, float groundY)
     m_landingTimer = 0.0f;
 }
 
+void Player::UpdateVisualEffects(float dt)
+{
+    // 終了待ち中は操作・物理を止め、足場の演出だけを元に戻す。
+    m_stageRenderer.Update(dt);
+}
+
 void Player::Respawn()
 {
     // 画像やTMXを再読み込みせず、プレイヤーだけを開始位置へ戻す。

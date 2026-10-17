@@ -1,4 +1,4 @@
-#include "TitleScene.h"
+﻿#include "TitleScene.h"
 #include "SceneManager.h"
 #include "SceneType.h"
 
@@ -28,12 +28,16 @@ void TitleScene::Update(float dt, const Input& input)
 		m_mgr->Context().showFps = !m_mgr->Context().showFps;
 
 	if (input.Triggered(Action::ForceLow))
-		if (m_mgr->Context().quality == QualityLevel::High) {
+	{
+		if (m_mgr->Context().quality == QualityLevel::High)
+		{
 			m_mgr->Context().quality = QualityLevel::Low;
 		}
-		else {
+		else
+		{
 			m_mgr->Context().quality = QualityLevel::High;
 		}
+	}
 
 	if (input.Triggered(Action::Decide))
 	{
@@ -56,16 +60,16 @@ void TitleScene::Draw()
 	DrawString(40, 40, "Pipe Bros", gray);
 	DrawString(40, 100, "Pipe Bros", white);
 
-	DrawString(40, 170, "Jump: Space / PadA", gray);
-	DrawString(40, 200, "Hold Jump: Higher jump", gray);
-	DrawString(40, 230, "Rule: Avoid triangle obstacles", gray);
-	DrawString(40, 260, "Score: Distance", gray);
-	DrawString(40, 290, "Decide: Launch", gray);
-	DrawString(40, 320, "Back: Esc/PadB (Debug)  F1: Toggle FPS  F2: Toggle LOW", gray);
+	DrawString(40, 170, "Move: LEFT / RIGHT   Run: SHIFT", gray);
+	DrawString(40, 200, "Jump: SPACE (hold for a higher jump)", gray);
+	DrawString(40, 230, "Hit platforms from below, then kick overturned turtles.", gray);
+	DrawString(40, 260, "Score: 100 per turtle / Starting lives: 3", gray);
+	DrawString(40, 290, "Clear: Defeat all turtles. Lose all lives: Game Over.", gray);
+	DrawString(40, 320, "ENTER / SPACE: START   ESC: QUIT   F1: FPS   F2: QUALITY", gray);
 
 	char buf[128];
-	std::snprintf(buf, sizeof(buf), "HI-SCORE: %.2f", m_mgr->Context().hiScore);
-	DrawString(40, 280, buf, white);
+	std::snprintf(buf, sizeof(buf), "HI-SCORE: %.0f", m_mgr->Context().hiScore);
+	DrawString(40, 440, buf, white);
 
 	if (m_showPress)
 		DrawString(40, 360, "PRESS DECIDE TO START", white);
