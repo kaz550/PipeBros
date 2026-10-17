@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.10" name="PipeBrosStage" tilewidth="313" tileheight="313" tilecount="16" columns="4" margin="1" spacing="0" tilerendersize="grid" fillmode="stretch">
+<tileset version="1.10" name="PipeBrosStage" tilewidth="313" tileheight="313" tilecount="16" columns="4" margin="1" spacing="0" tilerendersize="grid" fillmode="stretch" objectalignment="bottomleft">
   <image source="../images/stage_tiles.png" width="1254" height="1254" />
   <tile id="0" type="PlatformLeft" />
   <tile id="1" type="PlatformMiddle" />

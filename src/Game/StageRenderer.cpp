@@ -104,6 +104,9 @@ bool StageRenderer::Load(const char* filename)
             return Fail_("Use the stretch tileset fill mode.");
         Tileset tileset;
         tileset.firstGid = firstGid;
+        const char* alignment = element->Attribute("objectalignment");
+        tileset.objectsBottomLeft = !alignment || std::strcmp(alignment, "unspecified") == 0
+            || std::strcmp(alignment, "bottomleft") == 0;
         tileset.tileWidth = element->IntAttribute("tilewidth");
         tileset.tileHeight = element->IntAttribute("tileheight");
         tileset.columns = element->IntAttribute("columns");
@@ -174,36 +177,81 @@ bool StageRenderer::Load(const char* filename)
             const std::uint32_t gid = rawGid & 0x0fffffffu;
             if (gid != 0)
             {
-                int setIndex = -1;
-                for (int i = 0; i < static_cast<int>(m_tilesets.size()); ++i)
-                {
-                    if (m_tilesets[i].firstGid <= gid) setIndex = i;
-                    else break;
-                }
-                if (setIndex == -1) return Fail_("Tile ID has no matching tileset.");
-                const Tileset& set = m_tilesets[setIndex];
-                const std::uint32_t local = gid - set.firstGid;
-                if (local >= static_cast<std::uint32_t>(set.tileCount))
-                    return Fail_("Tile ID exceeds the tileset tile count.");
-                Tile tile;
-                tile.tileset = setIndex;
-                tile.sourceX = set.margin + static_cast<int>(local % set.columns) * (set.tileWidth + set.spacing);
-                tile.sourceY = set.margin + static_cast<int>(local / set.columns) * (set.tileHeight + set.spacing);
-                tile.x = (index % width) * m_tileWidth + offsetX;
-                tile.y = (index / width) * m_tileHeight + offsetY;
-                tile.flipX = (rawGid & 0x80000000u) != 0;
-                tile.flipY = (rawGid & 0x40000000u) != 0;
-                tile.diagonal = (rawGid & 0x20000000u) != 0;
                 const char* layerName = layer->Attribute("name");
-                tile.isPlatform = layerName && std::strcmp(layerName, "Platforms") == 0;
-                if (tile.diagonal && (m_tileWidth != m_tileHeight || set.tileWidth != set.tileHeight))
-                    return Fail_("Diagonal flips currently require square source and map tiles.");
-                m_tiles.push_back(tile);
+                const bool platform = layerName && std::strcmp(layerName, "Platforms") == 0;
+                if (!AddTile_(rawGid, (index % width) * m_tileWidth + offsetX,
+                    (index / width) * m_tileHeight + offsetY,
+                    static_cast<float>(m_tileWidth), static_cast<float>(m_tileHeight), platform)) return false;
             }
             ++index;
         }
         if (index != width * height) return Fail_("CSV tile count does not match the layer size.");
     }
+    // 画像オブジェクトは通常のタイルレイヤーの後に描画する。
+    // 今回は回転なし・左下基準のタイルオブジェクトを扱う。
+    for (const tinyxml2::XMLElement* group = map->FirstChildElement("objectgroup");
+        group; group = group->NextSiblingElement("objectgroup"))
+    {
+        if (!group->BoolAttribute("visible", true)) continue;
+        for (const tinyxml2::XMLElement* object = group->FirstChildElement("object");
+            object; object = object->NextSiblingElement("object"))
+        {
+            if (!object->Attribute("gid") || !object->BoolAttribute("visible", true)) continue;
+            if (group->FloatAttribute("opacity", 1.0f) != 1.0f || group->Attribute("tintcolor")
+                || object->FloatAttribute("rotation") != 0.0f || object->Attribute("template"))
+                return Fail_("Use unrotated tile objects without group tint/opacity or templates.");
+            float x = 0.0f, bottom = 0.0f, width = 0.0f, height = 0.0f;
+            std::uint32_t rawGid = 0;
+            if (object->QueryUnsignedAttribute("gid", &rawGid) != tinyxml2::XML_SUCCESS
+                || (rawGid & 0x0fffffffu) == 0
+                || object->QueryFloatAttribute("x", &x) != tinyxml2::XML_SUCCESS
+                || object->QueryFloatAttribute("y", &bottom) != tinyxml2::XML_SUCCESS
+                || object->QueryFloatAttribute("width", &width) != tinyxml2::XML_SUCCESS
+                || object->QueryFloatAttribute("height", &height) != tinyxml2::XML_SUCCESS
+                || !std::isfinite(x) || !std::isfinite(bottom)
+                || !std::isfinite(width) || !std::isfinite(height) || width <= 0.0f || height <= 0.0f)
+                return Fail_("Tile objects need a valid GID, x/y and positive width/height.");
+            int setIndex = -1;
+            for (int i = 0; i < static_cast<int>(m_tilesets.size()); ++i)
+                if (m_tilesets[i].firstGid <= (rawGid & 0x0fffffffu)) setIndex = i;
+            if (setIndex < 0 || !m_tilesets[setIndex].objectsBottomLeft)
+                return Fail_("Tile objects require bottom-left tileset alignment.");
+            x += group->FloatAttribute("offsetx") + group->FloatAttribute("x");
+            bottom += group->FloatAttribute("offsety") + group->FloatAttribute("y");
+            if (!std::isfinite(x) || !std::isfinite(bottom)) return Fail_("Invalid object group offset.");
+            if (!AddTile_(rawGid, x, bottom - height, width, height, false)) return false;
+        }
+    }
+    return true;
+}
+
+bool StageRenderer::AddTile_(std::uint32_t rawGid, float x, float y,
+    float width, float height, bool isPlatform)
+{
+    const std::uint32_t gid = rawGid & 0x0fffffffu;
+    int setIndex = -1;
+    for (int i = 0; i < static_cast<int>(m_tilesets.size()); ++i)
+    {
+        if (m_tilesets[i].firstGid <= gid) setIndex = i;
+        else break;
+    }
+    if (setIndex == -1) return Fail_("Tile ID has no matching tileset.");
+    const Tileset& set = m_tilesets[setIndex];
+    const std::uint32_t local = gid - set.firstGid;
+    if (local >= static_cast<std::uint32_t>(set.tileCount))
+        return Fail_("Tile ID exceeds the tileset tile count.");
+    Tile tile;
+    tile.tileset = setIndex;
+    tile.sourceX = set.margin + static_cast<int>(local % set.columns) * (set.tileWidth + set.spacing);
+    tile.sourceY = set.margin + static_cast<int>(local / set.columns) * (set.tileHeight + set.spacing);
+    tile.x = x; tile.y = y; tile.width = width; tile.height = height;
+    tile.flipX = (rawGid & 0x80000000u) != 0;
+    tile.flipY = (rawGid & 0x40000000u) != 0;
+    tile.diagonal = (rawGid & 0x20000000u) != 0;
+    tile.isPlatform = isPlatform;
+    if (tile.diagonal && (width != height || set.tileWidth != set.tileHeight))
+        return Fail_("Diagonal flips require square source and destination tiles.");
+    m_tiles.push_back(tile);
     return true;
 }
 
@@ -284,12 +332,13 @@ void StageRenderer::Draw() const
         const bool flipY = tile.diagonal ? !tile.flipX : tile.flipY;
         const double angle = tile.diagonal ? 1.5707963267948966 : 0.0;
         DrawRectRotaGraph3(
-            static_cast<int>(std::lround(tile.x + m_tileWidth * 0.5f)),
-            static_cast<int>(std::lround(tile.y + m_tileHeight * 0.5f + GetBumpOffset_(tile))),
+            static_cast<int>(std::lround(tile.x + tile.width * 0.5f)),
+            static_cast<int>(std::lround(tile.y + tile.height * 0.5f + GetBumpOffset_(tile))),
             tile.sourceX, tile.sourceY, set.tileWidth, set.tileHeight,
             set.tileWidth / 2, set.tileHeight / 2,
-            static_cast<double>(m_tileWidth) / set.tileWidth,
-            static_cast<double>(m_tileHeight) / set.tileHeight,
+            static_cast<double>(tile.width) / set.tileWidth,
+            static_cast<double>(tile.height) / set.tileHeight,
             angle, set.graph, TRUE, flipX ? TRUE : FALSE, flipY ? TRUE : FALSE);
     }
 }
+

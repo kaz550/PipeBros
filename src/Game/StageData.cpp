@@ -9,6 +9,7 @@ bool StageData::Load(const char* filename)
     m_loaded = false;
     m_solids.clear();
     m_enemySpawns.clear();
+    m_enemyExits.clear();
     m_error.clear();
     tinyxml2::XMLDocument document;
     if (document.LoadFile(filename) != tinyxml2::XML_SUCCESS)
@@ -54,8 +55,10 @@ bool StageData::Load(const char* filename)
             {
                 const char* objectType = object->Attribute("class");
                 if (!objectType || objectType[0] == '\0') objectType = object->Attribute("type");
-                if (objectType && std::strcmp(objectType, "EnemySpawn") == 0)
+                if (objectType && (std::strcmp(objectType, "EnemySpawn") == 0
+                    || std::strcmp(objectType, "EnemyExit") == 0))
                 {
+                    const bool isExit = std::strcmp(objectType, "EnemyExit") == 0;
                     StageEnemySpawn spawn;
                     spawn.name = name ? name : "EnemySpawn";
                     if (!object->FirstChildElement("point")
@@ -63,10 +66,11 @@ bool StageData::Load(const char* filename)
                         || object->QueryFloatAttribute("y", &spawn.footY) != tinyxml2::XML_SUCCESS
                         || !std::isfinite(spawn.x) || !std::isfinite(spawn.footY))
                     {
-                        m_error = "EnemySpawn must be a point with valid x/y coordinates.";
+                        m_error = "EnemySpawn/EnemyExit must be a point with valid x/y coordinates.";
                         return false;
                     }
                     spawn.direction = spawn.x < SCREEN_W * 0.5f ? 1 : -1;
+                    if (isExit) spawn.direction = -spawn.direction;
                     const tinyxml2::XMLElement* properties = object->FirstChildElement("properties");
                     if (properties)
                     {
@@ -79,13 +83,22 @@ bool StageData::Load(const char* filename)
                                 if (property->QueryIntAttribute("value", &spawn.direction) != tinyxml2::XML_SUCCESS
                                     || (spawn.direction != 1 && spawn.direction != -1))
                                 {
-                                    m_error = "EnemySpawn direction must be 1 or -1.";
+                                    m_error = "EnemySpawn/EnemyExit direction must be 1 or -1.";
                                     return false;
                                 }
                             }
                         }
                     }
-                    m_enemySpawns.push_back(spawn);
+                    if (isExit)
+                    {
+                        StageEnemyExit exit;
+                        exit.name = spawn.name;
+                        exit.x = spawn.x;
+                        exit.footY = spawn.footY;
+                        exit.direction = spawn.direction;
+                        m_enemyExits.push_back(exit);
+                    }
+                    else m_enemySpawns.push_back(spawn);
                     continue;
                 }
                 if (!name || std::strcmp(name, "Player1") != 0) continue;
@@ -228,4 +241,5 @@ void StageData::Move(float& x, float& y, float& vx, float& vy,
         }
     }
 }
+
 

@@ -46,21 +46,70 @@ void EnemyManager::Reset(const StageData& stage)
         return;
     }
     if (!LoadSprite_()) return;
-    for (const StageEnemySpawn& spawn : stage.GetEnemySpawns())
+    for (int i = 0; i < static_cast<int>(stage.GetEnemySpawns().size()); ++i)
     {
         Turtle turtle;
-        // EnemySpawnのXは足元中央、Yは足元の高さ。
-        turtle.x = spawn.x - turtle.width * 0.5f;
-        turtle.y = spawn.footY - turtle.height;
-        turtle.direction = spawn.direction;
+        RespawnTurtle_(turtle, stage, i);
         m_turtles.push_back(turtle);
     }
     if (m_turtles.empty()) m_error = "No EnemySpawn points in the Spawns layer.";
 }
 
+void EnemyManager::RespawnTurtle_(Turtle& turtle, const StageData& stage, int spawnIndex)
+{
+    const auto& spawns = stage.GetEnemySpawns();
+    if (spawns.empty()) return;
+    if (spawnIndex < 0 || spawnIndex >= static_cast<int>(spawns.size())) spawnIndex = 0;
+    const StageEnemySpawn& spawn = spawns[spawnIndex];
+    turtle = Turtle{};
+    turtle.spawnIndex = spawnIndex;
+    turtle.x = spawn.x - turtle.width * 0.5f;
+    turtle.y = spawn.footY - turtle.height;
+    turtle.direction = spawn.direction;
+}
+
+bool EnemyManager::TryExit_(Turtle& turtle, const StageData& stage, float dt)
+{
+    if (turtle.state != State::Walking || !turtle.grounded) return false;
+    for (const StageEnemyExit& exit : stage.GetEnemyExits())
+    {
+        if (turtle.direction != exit.direction
+            || std::fabs(turtle.y + turtle.height - exit.footY) > 0.5f) continue;
+        const float advance = 85.0f * dt;
+        const bool reached = exit.direction < 0
+            ? turtle.x - advance <= exit.x
+            : turtle.x + turtle.width + advance >= exit.x;
+        if (!reached) continue;
+        // 同じ側の上段出現ポイントを選ぶ。敵の個体数・撃破数は増やさない。
+        const auto& spawns = stage.GetEnemySpawns();
+        if (spawns.empty()) return false;
+        int target = 0;
+        float nearest = std::fabs(spawns[0].x - exit.x);
+        for (int i = 1; i < static_cast<int>(spawns.size()); ++i)
+        {
+            const float distance = std::fabs(spawns[i].x - exit.x);
+            if (distance < nearest) { nearest = distance; target = i; }
+        }
+        turtle.spawnIndex = target;
+        turtle.state = State::Respawning;
+        turtle.stateTime = 2.0f;
+        turtle.vx = turtle.vy = 0.0f;
+        turtle.grounded = false;
+        return true;
+    }
+    return false;
+}
+
 void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stage)
 {
     if (!turtle.active) return;
+    if (turtle.state == State::Respawning)
+    {
+        turtle.stateTime -= dt;
+        if (turtle.stateTime <= 0.0f)
+            RespawnTurtle_(turtle, stage, turtle.spawnIndex);
+        return;
+    }
     turtle.animationTime += dt;
     if (turtle.state == State::Defeated)
     {
@@ -72,6 +121,7 @@ void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stag
             turtle.active = false;
         return;
     }
+    if (TryExit_(turtle, stage, dt)) return;
     if (turtle.state == State::Overturned)
     {
         turtle.stateTime -= dt;
@@ -97,8 +147,52 @@ void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stag
     stage.Move(turtle.x, turtle.y, turtle.vx, turtle.vy,
         turtle.width, turtle.height, dt, static_cast<float>(SCREEN_W),
         turtle.grounded, ignoredBumpId);
+    if (TryExit_(turtle, stage, 0.0f)) return;
     if (turtle.state == State::Walking && turtle.vx == 0.0f)
         turtle.direction = -turtle.direction;
+}
+
+void EnemyManager::ResolveEnemyContacts_(float dt)
+{
+    // 本体の間に8pxの余白を取り、次の移動で接触する場合も先に反転する。
+    const float gap = 8.0f;
+    const float speed = 85.0f;
+    for (std::size_t i = 0; i < m_turtles.size(); ++i)
+    {
+        Turtle& a = m_turtles[i];
+        if (!a.active || a.state == State::Defeated || a.state == State::Respawning) continue;
+        for (std::size_t j = i + 1; j < m_turtles.size(); ++j)
+        {
+            Turtle& b = m_turtles[j];
+            if (!b.active || b.state == State::Defeated || b.state == State::Respawning) continue;
+            // 別の段の敵や、上下に接するだけの敵は対象外。
+            if (a.y + a.height <= b.y + 4.0f || b.y + b.height <= a.y + 4.0f) continue;
+
+            float distance = (b.x + b.width * 0.5f) - (a.x + a.width * 0.5f);
+            distance -= std::round(distance / SCREEN_W) * SCREEN_W;
+            const int side = distance >= 0.0f ? 1 : -1;
+            const bool walkingA = a.state == State::Walking;
+            const bool walkingB = b.state == State::Walking;
+            const float velocityA = walkingA ? a.direction * speed : 0.0f;
+            const float velocityB = walkingB ? b.direction * speed : 0.0f;
+            const float closingSpeed = (velocityA - velocityB) * side;
+            // 離れ始めた組み合わせは反転しない。連続フレームでの向きの振動を防ぐ。
+            if (closingSpeed <= 0.0f) continue;
+            const float contactDistance = (a.width + b.width) * 0.5f + gap;
+            if (std::fabs(distance) > contactDistance + closingSpeed * dt) continue;
+
+            if (walkingA && a.direction == side)
+            {
+                a.direction = -side;
+                a.vx = a.direction * speed;
+            }
+            if (walkingB && b.direction == -side)
+            {
+                b.direction = side;
+                b.vx = b.direction * speed;
+            }
+        }
+    }
 }
 
 void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
@@ -114,7 +208,7 @@ void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
         if (hitX > solid.x + solid.width) hitX = solid.x + solid.width;
         for (Turtle& turtle : m_turtles)
         {
-            if (!turtle.active || turtle.state == State::Defeated || !turtle.grounded) continue;
+            if (!turtle.active || turtle.state == State::Defeated || turtle.state == State::Respawning || !turtle.grounded) continue;
             if (std::fabs(turtle.y + turtle.height - solid.y) > 0.5f) continue;
             float centerX = turtle.x + turtle.width * 0.5f;
             centerX += std::round((solidCenter - centerX) / screenWidth) * screenWidth;
@@ -161,12 +255,15 @@ bool EnemyManager::Update(float dt, const StageData& stage, int bumpedSolidId,
     float hitX, const Aabb& player, bool canHurtPlayer)
 {
     if (!stage.IsLoaded() || !std::isfinite(dt) || dt <= 0.0f) return false;
+    ResolveEnemyContacts_(dt);
     for (Turtle& turtle : m_turtles) UpdateTurtle_(turtle, dt, stage);
     ApplyBump_(stage, bumpedSolidId, hitX);
+    // 着地・復帰・転倒によって、このフレームで近づいた場合も処理する。
+    ResolveEnemyContacts_(0.0f);
     bool playerHit = false;
     for (Turtle& turtle : m_turtles)
     {
-        if (!turtle.active || turtle.state == State::Defeated || !TouchesPlayer_(turtle, player)) continue;
+        if (!turtle.active || turtle.state == State::Defeated || turtle.state == State::Respawning || !TouchesPlayer_(turtle, player)) continue;
         if (turtle.state == State::Overturned || turtle.state == State::Recovering)
         {
             const float playerCenter = (player.l + player.r) * 0.5f;
@@ -209,7 +306,7 @@ void EnemyManager::Draw() const
     const float scale = 0.16f;
     for (const Turtle& turtle : m_turtles)
     {
-        if (!turtle.active) continue;
+        if (!turtle.active || turtle.state == State::Respawning) continue;
         const SpriteFrame& frame = frames[GetFrame_(turtle)];
         const int centerX = frame.width / 2, centerY = frame.height / 2;
         const float sign = turtle.direction < 0 ? -1.0f : 1.0f;
@@ -231,3 +328,4 @@ void EnemyManager::Draw() const
         }
     }
 }
+

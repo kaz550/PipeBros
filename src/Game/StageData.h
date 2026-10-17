@@ -20,6 +20,14 @@ struct StageEnemySpawn
     int direction = 1;
 };
 
+struct StageEnemyExit
+{
+    std::string name;
+    float x = 0.0f;
+    float footY = 0.0f;
+    int direction = -1;
+};
+
 class StageData
 {
 public:
@@ -28,6 +36,7 @@ public:
     const std::string& GetError() const { return m_error; }
     const std::vector<StageSolid>& GetSolids() const { return m_solids; }
     const std::vector<StageEnemySpawn>& GetEnemySpawns() const { return m_enemySpawns; }
+    const std::vector<StageEnemyExit>& GetEnemyExits() const { return m_enemyExits; }
     float GetPlayerX() const { return m_playerX; }
     float GetPlayerFootY() const { return m_playerFootY; }
     float GetGroundY() const { return m_groundY; }
@@ -41,10 +50,12 @@ public:
 private:
     std::vector<StageSolid> m_solids;
     std::vector<StageEnemySpawn> m_enemySpawns;
+    std::vector<StageEnemyExit> m_enemyExits;
     std::string m_error;
     float m_playerX = 220.0f;
     float m_playerFootY = 620.0f;
     float m_groundY = 620.0f;
     bool m_loaded = false;
 };
+
 

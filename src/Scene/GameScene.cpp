@@ -117,12 +117,12 @@ void GameScene::Draw()
     m_player.Draw();
     m_enemyManager.Draw();
     const unsigned int white = GetColor(255, 255, 255);
-    DrawFormatString(24, 24, white, "SCORE: %06d   LIVES: %d   STAGE: 1 / 1",
+    DrawFormatString(24, 16, white, "SCORE: %06d   LIVES: %d   STAGE: 1 / 1",
         m_score, m_lives);
-    DrawFormatString(24, 52, white, "DEFEATED: %d / %d   TIME: %.1f   INVUL: %.1f",
+    DrawFormatString(24, 44, white, "DEFEATED: %d / %d   TIME: %.1f   INVUL: %.1f",
         m_enemyManager.GetDefeatedCount(), m_enemyManager.GetTotalCount(),
         m_elapsedTime, m_invulnerabilityTimer);
-    DrawString(24, 80, "ARROWS: MOVE / SHIFT: RUN / SPACE: JUMP / F3: DEBUG / R: RESTART", white);
+    DrawString(24, 72, "ARROWS: MOVE / SHIFT: RUN / SPACE: JUMP / F3: DEBUG / R: RESTART", white);
     if (!m_enemyManager.GetError().empty())
         DrawFormatString(24, 108, GetColor(255, 150, 120), "%s", m_enemyManager.GetError().c_str());
     if (m_isFinished)
@@ -133,3 +133,4 @@ void GameScene::Draw()
         DrawString(500, 250, "MOVING TO RESULT...", white);
     }
 }
+

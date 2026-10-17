@@ -23,7 +23,7 @@ public:
     const std::string& GetError() const { return m_error; }
 
 private:
-    enum class State { Walking, Overturned, Recovering, Defeated };
+    enum class State { Walking, Overturned, Recovering, Defeated, Respawning };
     struct Turtle
     {
         float x = 0.0f, y = 0.0f;
@@ -31,6 +31,7 @@ private:
         float width = 48.0f, height = 36.0f;
         float animationTime = 0.0f, stateTime = 0.0f;
         int direction = 1;
+        int spawnIndex = 0;
         bool grounded = false, active = true;
         State state = State::Walking;
     };
@@ -40,7 +41,10 @@ private:
         float pivotX, pivotY;
     };
     bool LoadSprite_();
+    void RespawnTurtle_(Turtle& turtle, const StageData& stage, int spawnIndex);
+    bool TryExit_(Turtle& turtle, const StageData& stage, float dt);
     void UpdateTurtle_(Turtle& turtle, float dt, const StageData& stage);
+    void ResolveEnemyContacts_(float dt);
     void ApplyBump_(const StageData& stage, int solidId, float hitX);
     void Kick_(Turtle& turtle, int direction);
     bool TouchesPlayer_(const Turtle& turtle, const Aabb& player) const;
@@ -50,3 +54,4 @@ private:
     int m_defeatedCount = 0;
     std::string m_error;
 };
+

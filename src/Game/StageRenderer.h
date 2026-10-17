@@ -32,6 +32,7 @@ private:
         int spacing = 0;
         int graph = -1;
         bool renderAtGridSize = false;
+        bool objectsBottomLeft = true;
     };
     struct Tile
     {
@@ -40,6 +41,8 @@ private:
         int sourceY = 0;
         float x = 0.0f;
         float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
         bool flipX = false;
         bool flipY = false;
         bool diagonal = false;
@@ -59,6 +62,8 @@ private:
         float amplitude = 10.0f;
         float radius = 80.0f;
     };
+    bool AddTile_(std::uint32_t rawGid, float x, float y,
+        float width, float height, bool isPlatform);
     float GetBumpOffset_(const Tile& tile) const;
     void Release_();
     bool Fail_(const std::string& message);
@@ -70,3 +75,4 @@ private:
     int m_tileHeight = 0;
     float m_mapPixelWidth = 0.0f;
 };
+
