@@ -1,19 +1,27 @@
-#pragma once
+﻿#pragma once
 #include "IScene.h"
 
 class SceneManager;
+class Input;
 
 class TitleScene : public IScene
 {
 public:
-	explicit TitleScene(SceneManager* mgr) : m_mgr(mgr) {}
-
-	void Enter() override;
-	void Update(float dt, const class Input& input) override;
-	void Draw() override;
+    explicit TitleScene(SceneManager* mgr) : m_mgr(mgr) {}
+    ~TitleScene() override;
+    void Enter() override;
+    void Update(float dt, const Input& input) override;
+    void Draw() override;
 
 private:
-	SceneManager* m_mgr = nullptr;
-	float m_blink = 0.0f;
-	bool  m_showPress = true;
+    void DrawCentered_(const char* text, int y, int color, int font) const;
+    void DrawHelp_() const;
+    SceneManager* m_mgr = nullptr;
+    int m_background = -1;
+    int m_menuFont = -1, m_smallFont = -1, m_headerFont = -1;
+    int m_selected = 0;
+    float m_phase = 0.0f, m_inputLockTimer = 0.2f;
+    bool m_showHelp = false;
+    bool m_waitDecideRelease = true;
+    bool m_actionRequested = false;
 };

@@ -21,6 +21,8 @@ struct SceneContext
     int lastHits = 0;
     float lastPlayTime = 0.0f;
 
+    // タイトルの終了メニューからAppの終了経路へ通知する。
+    bool quitRequested = false;
     bool showFps = true;
     float fps = 60.0f;
     QualityLevel quality = QualityLevel::High;
@@ -29,3 +31,4 @@ struct SceneContext
     int stageIndex = 0;
     int stageCount = 1;
 };
+

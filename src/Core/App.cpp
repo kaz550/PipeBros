@@ -1,4 +1,4 @@
-#include "App.h"
+ï»¿#include "App.h"
 #include "Config.h"
 #include "../Input/Input.h"
 #include "../Audio/Audio.h"
@@ -91,8 +91,8 @@ int App::Run()
 			const float fps = m_fps.GetFps();
 			m_scene.Context().fps = fps;
 
-			// è“®‚ÅLOW‚É‚³‚ê‚½ê‡‚àuŒp‘±”»’èv‚Í“­‚­‚ªA
-			// ForceLow‚Íg‚«‚Á‚©‚¯h‚Æ‚µ‚Äc‚·‰^—piHIGH•œ‹A‚Í©“®‚ÅOKj
+			// æ‰‹å‹•ã§LOWã«ã•ã‚ŒãŸå ´åˆã‚‚ã€Œç¶™ç¶šåˆ¤å®šã€ã¯åƒããŒã€
+			// ForceLowã¯â€œãã£ã‹ã‘â€ã¨ã—ã¦æ®‹ã™é‹ç”¨ï¼ˆHIGHå¾©å¸°ã¯è‡ªå‹•ã§OKï¼‰
 			m_quality.Force(m_scene.Context().quality);
 			m_quality.UpdateOnFpsSample(fps);
 			m_scene.Context().quality = m_quality.Level();
@@ -100,6 +100,7 @@ int App::Run()
 
 		// Scene update/draw
 		m_scene.Update(dt, input);
+		if (m_scene.Context().quitRequested) break;
 
 		ClearDrawScreen();
 		m_scene.Draw();
