@@ -10,6 +10,13 @@ EnemyManager::~EnemyManager()
         DeleteGraph(m_spriteSheet);
 }
 
+float EnemyManager::GetWalkSpeed_(const Turtle& turtle)
+{
+    int level = turtle.completedLoops / LOOPS_PER_SPEEDUP;
+    if (level > MAX_SPEED_LEVEL) level = MAX_SPEED_LEVEL;
+    return BASE_WALK_SPEED * (1.0f + SPEED_GAIN_PER_LEVEL * level);
+}
+
 bool EnemyManager::LoadSprite_()
 {
     if (m_spriteSheet != -1) return true;
@@ -61,7 +68,9 @@ void EnemyManager::RespawnTurtle_(Turtle& turtle, const StageData& stage, int sp
     if (spawns.empty()) return;
     if (spawnIndex < 0 || spawnIndex >= static_cast<int>(spawns.size())) spawnIndex = 0;
     const StageEnemySpawn& spawn = spawns[spawnIndex];
+    const int completedLoops = turtle.completedLoops;
     turtle = Turtle{};
+    turtle.completedLoops = completedLoops;
     turtle.spawnIndex = spawnIndex;
     turtle.x = spawn.x - turtle.width * 0.5f;
     turtle.y = spawn.footY - turtle.height;
@@ -75,7 +84,7 @@ bool EnemyManager::TryExit_(Turtle& turtle, const StageData& stage, float dt)
     {
         if (turtle.direction != exit.direction
             || std::fabs(turtle.y + turtle.height - exit.footY) > 0.5f) continue;
-        const float advance = 85.0f * dt;
+        const float advance = GetWalkSpeed_(turtle) * dt;
         const bool reached = exit.direction < 0
             ? turtle.x - advance <= exit.x
             : turtle.x + turtle.width + advance >= exit.x;
@@ -107,7 +116,12 @@ void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stag
     {
         turtle.stateTime -= dt;
         if (turtle.stateTime <= 0.0f)
+        {
+            // 下段から入り、上段へ戻るたびに1周。上限到達後は加算を止める。
+            if (turtle.completedLoops < LOOPS_PER_SPEEDUP * MAX_SPEED_LEVEL)
+                ++turtle.completedLoops;
             RespawnTurtle_(turtle, stage, turtle.spawnIndex);
+        }
         return;
     }
     turtle.animationTime += dt;
@@ -141,7 +155,7 @@ void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stag
             turtle.animationTime = 0.0f;
         }
     }
-    turtle.vx = turtle.state == State::Walking ? turtle.direction * 85.0f : 0.0f;
+    turtle.vx = turtle.state == State::Walking ? turtle.direction * GetWalkSpeed_(turtle) : 0.0f;
     if (!turtle.grounded) turtle.vy += 1800.0f * dt;
     int ignoredBumpId = -1;
     stage.Move(turtle.x, turtle.y, turtle.vx, turtle.vy,
@@ -156,7 +170,6 @@ void EnemyManager::ResolveEnemyContacts_(float dt)
 {
     // 本体の間に8pxの余白を取り、次の移動で接触する場合も先に反転する。
     const float gap = 8.0f;
-    const float speed = 85.0f;
     for (std::size_t i = 0; i < m_turtles.size(); ++i)
     {
         Turtle& a = m_turtles[i];
@@ -173,8 +186,8 @@ void EnemyManager::ResolveEnemyContacts_(float dt)
             const int side = distance >= 0.0f ? 1 : -1;
             const bool walkingA = a.state == State::Walking;
             const bool walkingB = b.state == State::Walking;
-            const float velocityA = walkingA ? a.direction * speed : 0.0f;
-            const float velocityB = walkingB ? b.direction * speed : 0.0f;
+            const float velocityA = walkingA ? a.direction * GetWalkSpeed_(a) : 0.0f;
+            const float velocityB = walkingB ? b.direction * GetWalkSpeed_(b) : 0.0f;
             const float closingSpeed = (velocityA - velocityB) * side;
             // 離れ始めた組み合わせは反転しない。連続フレームでの向きの振動を防ぐ。
             if (closingSpeed <= 0.0f) continue;
@@ -184,12 +197,12 @@ void EnemyManager::ResolveEnemyContacts_(float dt)
             if (walkingA && a.direction == side)
             {
                 a.direction = -side;
-                a.vx = a.direction * speed;
+                a.vx = a.direction * GetWalkSpeed_(a);
             }
             if (walkingB && b.direction == -side)
             {
                 b.direction = side;
-                b.vx = b.direction * speed;
+                b.vx = b.direction * GetWalkSpeed_(b);
             }
         }
     }
@@ -294,7 +307,9 @@ int EnemyManager::GetFrame_(const Turtle& turtle) const
         return 3 + (static_cast<int>(std::fmod(turtle.animationTime, 0.36f) / 0.18f) % 2);
     if (turtle.state == State::Recovering) return 5;
     if (turtle.state == State::Defeated) return 6;
-    const int step = static_cast<int>(std::fmod(turtle.animationTime, 0.48f) / 0.12f) % 4;
+    // 歩行速度に合わせて足のアニメーションも速くする。
+    const float walkTime = turtle.animationTime * (GetWalkSpeed_(turtle) / BASE_WALK_SPEED);
+    const int step = static_cast<int>(std::fmod(walkTime, 0.48f) / 0.12f) % 4;
     return step == 3 ? 1 : step;
 }
 

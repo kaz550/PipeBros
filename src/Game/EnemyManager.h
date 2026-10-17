@@ -32,6 +32,7 @@ private:
         float animationTime = 0.0f, stateTime = 0.0f;
         int direction = 1;
         int spawnIndex = 0;
+        int completedLoops = 0;
         bool grounded = false, active = true;
         State state = State::Walking;
     };
@@ -40,6 +41,11 @@ private:
         int x, y, width, height;
         float pivotX, pivotY;
     };
+    static constexpr float BASE_WALK_SPEED = 85.0f;
+    static constexpr int LOOPS_PER_SPEEDUP = 1;
+    static constexpr float SPEED_GAIN_PER_LEVEL = 0.25f;
+    static constexpr int MAX_SPEED_LEVEL = 4;
+    static float GetWalkSpeed_(const Turtle& turtle);
     bool LoadSprite_();
     void RespawnTurtle_(Turtle& turtle, const StageData& stage, int spawnIndex);
     bool TryExit_(Turtle& turtle, const StageData& stage, float dt);
