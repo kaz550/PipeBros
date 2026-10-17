@@ -16,6 +16,8 @@ void GameScene::Enter()
     m_player.Reset(PLAYER_START_X, GROUND_Y);
     m_enemyManager.Reset(m_player.GetStageData());
     m_invulnerabilityTimer = m_elapsedTime = m_finishTimer = 0.0f;
+    m_stageNumber = 1;
+    m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_lives = INITIAL_LIVES;
     m_score = m_hitCount = m_stageStartScore = 0;
     m_remainingTime = STAGE_TIME_LIMIT;
@@ -29,9 +31,9 @@ void GameScene::Enter()
         context.lastLives = INITIAL_LIVES;
         context.lastDefeated = context.lastEnemyCount = context.lastHits = 0;
         context.lastPlayTime = 0.0f;
-        // 現在用意しているのはstage01.tmxの1ステージ。
+        // 現在は同じ舞台を繰り返す。stageCount=0は最終ステージ未設定。
         context.stageIndex = 0;
-        context.stageCount = 1;
+        context.stageCount = 0;
     }
 }
 
@@ -43,6 +45,14 @@ void GameScene::RestartStage_()
     m_enemyManager.Reset(m_player.GetStageData());
     m_remainingTime = STAGE_TIME_LIMIT;
     m_invulnerabilityTimer = 0.0f;
+    m_stageIntroTimer = STAGE_INTRO_DURATION;
+    m_finishTimer = 0.0f;
+    m_isFinished = m_isClear = m_resultRequested = false;
+    if (m_mgr)
+    {
+        m_mgr->Context().stageIndex = m_stageNumber - 1;
+        m_mgr->Context().resultKind = ResultKind::None;
+    }
 }
 
 void GameScene::Finish_(bool stageClear)
@@ -51,6 +61,7 @@ void GameScene::Finish_(bool stageClear)
     m_isFinished = true;
     m_isClear = stageClear;
     m_finishTimer = 0.0f;
+    if (stageClear) return; // クリアは同じGameScene内で次のステージへ進める。
     if (m_mgr)
     {
         SceneContext& context = m_mgr->Context();
@@ -67,6 +78,19 @@ void GameScene::Finish_(bool stageClear)
 void GameScene::Update(float dt, const Input& input)
 {
     if (!std::isfinite(dt) || dt <= 0.0f) return;
+    const bool restartKey = CheckHitKey(KEY_INPUT_R) != 0;
+    if (restartKey && !m_prevRestartKey)
+    {
+        Enter();
+        return;
+    }
+    m_prevRestartKey = restartKey;
+    if (m_stageIntroTimer > 0.0f)
+    {
+        m_stageIntroTimer = m_stageIntroTimer > dt ? m_stageIntroTimer - dt : 0.0f;
+        m_player.UpdateVisualEffects(dt);
+        return;
+    }
     if (m_isFinished)
     {
         m_player.UpdateVisualEffects(dt);
@@ -77,7 +101,13 @@ void GameScene::Update(float dt, const Input& input)
                 m_player.GetAabb(), false);
         }
         m_finishTimer += dt;
-        if (m_finishTimer >= 1.2f && !m_resultRequested && m_mgr)
+        if (m_isClear && m_finishTimer >= STAGE_CLEAR_DURATION)
+        {
+            ++m_stageNumber;
+            RestartStage_();
+            return;
+        }
+        if (!m_isClear && m_finishTimer >= 1.2f && !m_resultRequested && m_mgr)
         {
             m_resultRequested = true;
             m_mgr->RequestChange(SceneType::Result);
@@ -85,13 +115,6 @@ void GameScene::Update(float dt, const Input& input)
         return;
     }
 
-    const bool restartKey = CheckHitKey(KEY_INPUT_R) != 0;
-    if (restartKey && !m_prevRestartKey)
-    {
-        Enter();
-        return;
-    }
-    m_prevRestartKey = restartKey;
     // タイムアップを先に確定し、同じフレームの接触で二重に残機を減らさない。
     const float playDt = dt < m_remainingTime ? dt : m_remainingTime;
     m_elapsedTime += playDt;
@@ -163,7 +186,7 @@ void GameScene::Draw()
     m_enemyManager.Draw();
     const unsigned int white = GetColor(255, 255, 255);
     DrawFormatString(24, 16, white, "SCORE: %06d   LIVES: %d", m_score, m_lives);
-    DrawString(SCREEN_W - 180, 16, "STAGE: 1 / 1", white);
+    DrawFormatString(SCREEN_W - 180, 16, white, "STAGE %02d", m_stageNumber);
     const int seconds = static_cast<int>(std::ceil(m_remainingTime));
     char timeText[32];
     const int textLength = std::snprintf(timeText, sizeof(timeText), "TIME %03d", seconds);
@@ -177,12 +200,24 @@ void GameScene::Draw()
     DrawString(24, 72, "ARROWS: MOVE / SHIFT: RUN / SPACE: JUMP / F3: DEBUG / R: RESTART", white);
     if (!m_enemyManager.GetError().empty())
         DrawFormatString(24, 108, GetColor(255, 150, 120), "%s", m_enemyManager.GetError().c_str());
-    if (m_isFinished)
+    if (m_stageIntroTimer > 0.0f || m_isFinished)
     {
-        const char* title = m_isClear ? "STAGE CLEAR!" : "GAME OVER";
-        DrawString(554, 220, title, GetColor(0, 0, 0));
-        DrawString(552, 218, title, GetColor(255, 230, 120));
-        DrawString(500, 250, "MOVING TO RESULT...", white);
+        char title[64];
+        if (m_stageIntroTimer > 0.0f)
+            std::snprintf(title, sizeof(title), "STAGE %02d", m_stageNumber);
+        else
+            std::snprintf(title, sizeof(title), "%s", m_isClear ? "STAGE CLEAR!" : "GAME OVER");
+        int length = 0;
+        while (title[length] != '\0') ++length;
+        const int x = (SCREEN_W - GetDrawStringWidth(title, length)) / 2;
+        DrawString(x + 2, 220, title, GetColor(0, 0, 0));
+        DrawString(x, 218, title, GetColor(255, 230, 120));
+        if (m_isFinished)
+        {
+            const char* message = m_isClear ? "NEXT STAGE..." : "MOVING TO RESULT...";
+            length = 0;
+            while (message[length] != '\0') ++length;
+            DrawString((SCREEN_W - GetDrawStringWidth(message, length)) / 2, 250, message, white);
+        }
     }
 }
-

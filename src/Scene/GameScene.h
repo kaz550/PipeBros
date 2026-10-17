@@ -19,6 +19,8 @@ private:
     void Finish_(bool stageClear);
     static constexpr float GROUND_Y = 620.0f;
     static constexpr float PLAYER_START_X = 220.0f;
+    static constexpr float STAGE_INTRO_DURATION = 1.5f;
+    static constexpr float STAGE_CLEAR_DURATION = 1.2f;
     static constexpr float STAGE_TIME_LIMIT = 120.0f;
     static constexpr int INITIAL_LIVES = 3;
     static constexpr int SCORE_PER_ENEMY = 100;
@@ -29,6 +31,8 @@ private:
     float m_remainingTime = STAGE_TIME_LIMIT;
     float m_elapsedTime = 0.0f;
     float m_finishTimer = 0.0f;
+    float m_stageIntroTimer = STAGE_INTRO_DURATION;
+    int m_stageNumber = 1;
     int m_lives = INITIAL_LIVES;
     int m_score = 0;
     int m_stageStartScore = 0;
