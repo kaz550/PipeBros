@@ -2,10 +2,11 @@
 #include "SceneManager.h"
 #include "../Input/Input.h"
 #include "../Core/Config.h"
-#include "DxLib.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include "DxLib.h"
 
 GameScene::GameScene(SceneManager* mgr)
     : m_mgr(mgr)
@@ -52,20 +53,23 @@ float GameScene::GetStageTimeLimit_(int stageNumber)
 
 void GameScene::Enter()
 {
-    // Resultと同じ書体・サイズ・太さ。Rリスタートでは既存ハンドルを再利用する。
     if (m_hudFont == -1)
         m_hudFont = CreateFontToHandle("Arial", 26, 7, DX_FONTTYPE_ANTIALIASING_4X4);
     if (m_scoreFont == -1)
         m_scoreFont = CreateFontToHandle("Arial", 32, 8, DX_FONTTYPE_ANTIALIASING_4X4);
     if (m_smallFont == -1)
         m_smallFont = CreateFontToHandle("Arial", 18, 4, DX_FONTTYPE_ANTIALIASING_4X4);
+    m_playerCount = m_mgr && m_mgr->Context().playerCount == 2 ? 2 : 1;
     m_stageNumber = 1;
     m_elapsedTime = 0.0f;
-    m_lives = INITIAL_LIVES;
-    m_score = m_hitCount = m_stageStartScore = 0;
+    for (int i = 0; i < 2; ++i)
+    {
+        m_playerStates[i] = PlayerState{};
+        if (i < m_playerCount) m_playerStates[i].lives = INITIAL_LIVES;
+    }
     m_stageSelectOpen = false;
     m_selectedStage = 1;
-    m_player.SetStageDebugVisible(false);
+    m_showStageDebug = false;
     RestartStage_();
     if (m_mgr)
     {
@@ -75,21 +79,48 @@ void GameScene::Enter()
         context.lastLives = INITIAL_LIVES;
         context.lastDefeated = context.lastEnemyCount = context.lastHits = 0;
         context.lastPlayTime = 0.0f;
-        // 舞台は共通で、敵の構成を切り替える。stageCount=0は最終ステージ未設定。
         context.stageIndex = 0;
         context.stageCount = 0;
+        for (int i = 0; i < 2; ++i)
+        {
+            context.playerScores[i] = context.playerHits[i] = context.playerDefeated[i] = 0;
+            context.playerLives[i] = m_playerStates[i].lives;
+        }
     }
+}
+
+bool GameScene::HasLivingPlayer_() const
+{
+    for (int i = 0; i < m_playerCount; ++i)
+        if (m_playerStates[i].lives > 0) return true;
+    return false;
+}
+
+void GameScene::AddScore_(int playerIndex, int points)
+{
+    PlayerState& state = m_playerStates[playerIndex];
+    state.score = (std::min)(999999, state.score + points);
 }
 
 void GameScene::RestartStage_()
 {
-    // 得点・残機・合計プレイ時間を保ち、ステージの状態だけを最初に戻す。
-    m_stageStartScore = m_score;
-    const bool debugVisible = m_player.IsStageDebugVisible();
-    m_player.Reset(PLAYER_START_X, GROUND_Y);
-    if (debugVisible) m_player.SetStageDebugVisible(true);
+    m_stageError.clear();
+    if (!m_stage.Load("assets/stages/stage01.tmx")) m_stageError = m_stage.GetError();
+    if (!m_stageRenderer.Load("assets/stages/stage01.tmx"))
+    {
+        m_stageError += " " + m_stageRenderer.GetError();
+        m_showStageDebug = true;
+    }
     m_isBonus = GetStageLineup_(m_stageNumber) == EnemyManager::Lineup::None;
-    m_enemyManager.Reset(m_player.GetStageData(), GetStageLineup_(m_stageNumber));
+    if (m_isBonus) while (m_stage.GetPowUses() > 0) m_stage.UsePow();
+    m_stageRenderer.SetPowState(m_stage.GetPow(), m_stage.GetPowUses());
+    for (int i = 0; i < m_playerCount; ++i)
+    {
+        m_players[i].Reset(m_stage, i);
+        m_playerStates[i].invulnerability = m_playerStates[i].respawn = 0.0f;
+        m_playerStates[i].defeated = 0;
+    }
+    m_enemyManager.Reset(m_stage, GetStageLineup_(m_stageNumber));
     m_bonusCoins.clear();
     m_bonusCollected = 0;
     m_bonusAnimationTime = 0.0f;
@@ -97,16 +128,13 @@ void GameScene::RestartStage_()
     m_stageSelectOpen = false;
     if (m_isBonus)
     {
-        while (m_player.GetStageData().GetPowUses() > 0) m_player.UsePow();
-        for (const StageBonusCoin& coin : m_player.GetStageData().GetBonusCoins())
+        for (const StageBonusCoin& coin : m_stage.GetBonusCoins())
             m_bonusCoins.push_back({ coin.x, coin.y, false });
         if (m_bonusCoins.empty()) m_bonusError = "No coin points in the TMX BonusCoins layer.";
         LoadBonusSprite_();
     }
     m_stageTimeLimit = GetStageTimeLimit_(m_stageNumber);
     m_remainingTime = m_stageTimeLimit;
-    m_invulnerabilityTimer = 0.0f;
-    m_respawnTimer = 0.0f;
     m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_finishTimer = 0.0f;
     m_isFinished = m_isClear = m_resultRequested = false;
@@ -117,178 +145,147 @@ void GameScene::RestartStage_()
     }
 }
 
-void GameScene::RespawnPlayer_()
+void GameScene::RespawnPlayer_(int playerIndex)
 {
-    m_respawnTimer = 0.0f;
-    m_player.Respawn();
-    // 待機時間を含めず、姿を現した時点から無敵2秒を開始する。
-    m_invulnerabilityTimer = 2.0f;
+    PlayerState& state = m_playerStates[playerIndex];
+    state.respawn = 0.0f;
+    m_players[playerIndex].Respawn();
+    state.invulnerability = 2.0f;
 }
 
 void GameScene::Finish_(bool stageClear)
 {
     if (m_isFinished) return;
     m_isFinished = true;
-    m_respawnTimer = 0.0f;
     m_isClear = stageClear;
     m_finishTimer = 0.0f;
-    if (stageClear) return; // クリアは同じGameScene内で次のステージへ進める。
+    if (stageClear) return;
     if (m_mgr)
     {
         SceneContext& context = m_mgr->Context();
-        context.lastScore = static_cast<float>(m_score);
-        context.lastLives = m_lives;
+        context.lastScore = 0.0f;
+        context.lastLives = context.lastHits = 0;
+        for (int i = 0; i < m_playerCount; ++i)
+        {
+            const PlayerState& state = m_playerStates[i];
+            context.playerScores[i] = state.score;
+            context.playerLives[i] = state.lives;
+            context.playerHits[i] = state.hits;
+            context.playerDefeated[i] = state.defeated;
+            context.lastScore = (std::max)(context.lastScore, static_cast<float>(state.score));
+            context.lastLives += state.lives;
+            context.lastHits += state.hits;
+        }
         context.lastDefeated = m_enemyManager.GetDefeatedCount();
         context.lastEnemyCount = m_enemyManager.GetTotalCount();
-        context.lastHits = m_hitCount;
         context.lastPlayTime = m_elapsedTime;
-        context.resultKind = stageClear ? ResultKind::StageClear : ResultKind::GameOver;
+        context.resultKind = ResultKind::GameOver;
     }
 }
 
 void GameScene::Update(float dt, const Input& input)
 {
     if (!std::isfinite(dt) || dt <= 0.0f) return;
-    if (input.Triggered(Action::Restart))
-    {
-        Enter();
-        return;
-    }
-    // F3は開始表示・復帰待ち中も操作可能。入力はGameSceneで1回だけ処理する。
+    if (input.Triggered(Action::Restart)) { Enter(); return; }
     if (input.Triggered(Action::ToggleDebug))
     {
-        m_player.SetStageDebugVisible(!m_player.IsStageDebugVisible());
-        if (!m_player.IsStageDebugVisible()) m_stageSelectOpen = false;
+        m_showStageDebug = !m_showStageDebug;
+        if (!m_showStageDebug) m_stageSelectOpen = false;
     }
-    if (input.Triggered(Action::ToggleStageSelect) && m_player.IsStageDebugVisible())
+    if (input.Triggered(Action::ToggleStageSelect) && m_showStageDebug)
     {
         if (m_stageSelectOpen) m_stageSelectOpen = false;
         else
         {
             m_stageSelectOpen = true;
-            m_selectedStage = m_stageNumber < DEBUG_MAX_STAGE ? m_stageNumber : DEBUG_MAX_STAGE;
+            m_selectedStage = (std::min)(m_stageNumber, DEBUG_MAX_STAGE);
             m_waitStageSelectRelease = true;
         }
         return;
     }
-    if (m_stageSelectOpen)
-    {
-        UpdateStageSelect_(input);
-        return;
-    }
+    if (m_stageSelectOpen) { UpdateStageSelect_(input); return; }
+    m_stageRenderer.Update(dt);
     if (m_stageIntroTimer > 0.0f)
     {
-        m_stageIntroTimer = m_stageIntroTimer > dt ? m_stageIntroTimer - dt : 0.0f;
-        m_player.UpdateVisualEffects(dt);
+        m_stageIntroTimer = (std::max)(0.0f, m_stageIntroTimer - dt);
         return;
     }
     if (m_isFinished)
     {
-        m_player.UpdateVisualEffects(dt);
-        if (m_isClear)
-        {
-            // 最後に蹴った敵が飛び出す演出だけは継続する。
-            m_enemyManager.Update(dt, m_player.GetStageData(), -1, 0.0f,
-                m_player.GetAabb(), false);
-        }
+        if (m_isClear) m_enemyManager.Update(dt, m_stage, nullptr, nullptr, 0);
         m_finishTimer += dt;
         if (m_isClear && m_finishTimer >= STAGE_CLEAR_DURATION)
         {
             ++m_stageNumber;
             RestartStage_();
-            return;
         }
-        if (!m_isClear && m_finishTimer >= 1.2f && !m_resultRequested && m_mgr)
+        else if (!m_isClear && m_finishTimer >= 1.2f && !m_resultRequested && m_mgr)
         {
             m_resultRequested = true;
             m_mgr->RequestChange(SceneType::Result);
         }
         return;
     }
-
     if (m_stageTimeLimit > 0.0f)
     {
-        // タイムアップを先に確定し、同じフレームの接触で二重に残機を減らさない。
-        const float playDt = dt < m_remainingTime ? dt : m_remainingTime;
-        m_elapsedTime += playDt;
-        m_remainingTime = m_remainingTime > dt ? m_remainingTime - dt : 0.0f;
+        m_elapsedTime += (std::min)(dt, m_remainingTime);
+        m_remainingTime = (std::max)(0.0f, m_remainingTime - dt);
         if (m_remainingTime <= 0.0f)
         {
-            if (m_isBonus)
-            {
-                Finish_(true); // 時間切れは残機を減らさず次の通常ステージへ。
-                return;
-            }
-            ++m_hitCount;
-            --m_lives;
-            if (m_lives <= 0)
-            {
-                m_lives = 0;
-                Finish_(false);
-            }
-            else
-            {
-                RestartStage_();
-            }
+            if (m_isBonus) { Finish_(true); return; }
+            // 今後、通常面へ時間制限を設定した場合だけ全生存者が1ミスする。
+            for (int i = 0; i < m_playerCount; ++i)
+                if (m_playerStates[i].lives > 0) { --m_playerStates[i].lives; ++m_playerStates[i].hits; }
+            if (HasLivingPlayer_()) RestartStage_();
+            else Finish_(false);
             return;
         }
     }
-    else
-    {
-        // 通常ステージは経過時間の記録のみ。タイムアップは発生しない。
-        m_elapsedTime += dt;
-    }
-    if (m_isBonus)
-    {
-        UpdateBonus_(dt, input);
-        return;
-    }
-    if (m_respawnTimer > 0.0f)
-    {
-        m_player.UpdateVisualEffects(dt);
-        // プレイヤーは不在。敵の移動・周回・復帰・蹴られた後の飛行だけを進める。
-        m_enemyManager.Update(dt, m_player.GetStageData(), -1, 0.0f,
-            m_player.GetAabb(), false, false);
-        m_respawnTimer = m_respawnTimer > dt ? m_respawnTimer - dt : 0.0f;
-        if (m_respawnTimer <= 0.0f) RespawnPlayer_();
-        return;
-    }
-    m_invulnerabilityTimer = m_invulnerabilityTimer > dt
-        ? m_invulnerabilityTimer - dt : 0.0f;
-    m_player.Update(dt, input);
-    const bool hit = m_enemyManager.Update(dt, m_player.GetStageData(),
-        m_player.GetLastBumpedObjectId(), m_player.GetX() + m_player.GetWidth() * 0.5f,
-        m_player.GetAabb(), m_invulnerabilityTimer <= 0.0f);
-    // 3回目も先に敵へ衝撃を伝え、その後に表示と当たり判定を消す。
-    const StageData& stage = m_player.GetStageData();
-    if (m_player.GetLastBumpedObjectId() != -1
-        && m_player.GetLastBumpedObjectId() == stage.GetPow().id)
-        m_player.UsePow();
+    else m_elapsedTime += dt;
+    if (m_isBonus) { UpdateBonus_(dt, input); return; }
 
-    // やり直し前の得点に今回の撃破分を加える。再出現した敵も改めて加点する。
-    m_score = m_stageStartScore + m_enemyManager.GetDefeatedCount() * SCORE_PER_ENEMY;
-    if (hit)
+    EnemyManager::PlayerContact contacts[2];
+    EnemyManager::ContactResult results[2];
+    for (int i = 0; i < m_playerCount; ++i)
     {
-        ++m_hitCount;
-        --m_lives;
-        if (m_lives <= 0)
+        PlayerState& state = m_playerStates[i];
+        if (state.lives <= 0) continue;
+        if (state.respawn > 0.0f)
         {
-            m_lives = 0;
-            Finish_(false);
+            state.respawn = (std::max)(0.0f, state.respawn - dt);
+            if (state.respawn > 0.0f) continue;
+            RespawnPlayer_(i);
+            // 復活フレームは入力・接触を行わず、待機中の押下を持ち越さない。
+            continue;
         }
-        else
-        {
-            m_invulnerabilityTimer = 0.0f;
-            m_respawnTimer = RESPAWN_DELAY;
-            if (m_respawnTimer <= 0.0f) RespawnPlayer_();
-        }
+        state.invulnerability = (std::max)(0.0f, state.invulnerability - dt);
+        m_players[i].Update(dt, input.ForPlayer(i, m_playerCount));
+        contacts[i].body = m_players[i].GetAabb();
+        contacts[i].bumpedSolidId = m_players[i].GetLastBumpedObjectId();
+        contacts[i].hitX = m_players[i].GetX() + m_players[i].GetWidth() * 0.5f;
+        contacts[i].active = true;
+        contacts[i].canHurt = state.invulnerability <= 0.0f;
+        for (const StageSolid& solid : m_stage.GetSolids())
+            if (solid.id == contacts[i].bumpedSolidId) { m_stageRenderer.Bump(solid, contacts[i].hitX); break; }
     }
-    if (!m_isFinished && m_enemyManager.GetError().empty()
-        && m_enemyManager.GetTotalCount() > 0
-        && m_enemyManager.GetDefeatedCount() >= m_enemyManager.GetTotalCount())
+    // 人数にかかわらず敵の物理・周回タイマーは1フレームに1回だけ進む。
+    m_enemyManager.Update(dt, m_stage, contacts, results, m_playerCount);
+    m_stageRenderer.SetPowState(m_stage.GetPow(), m_stage.GetPowUses());
+    for (int i = 0; i < m_playerCount; ++i)
     {
-        Finish_(true);
+        PlayerState& state = m_playerStates[i];
+        state.defeated += results[i].defeated;
+        AddScore_(i, results[i].defeated * SCORE_PER_ENEMY);
+        if (!results[i].hit) continue;
+        ++state.hits;
+        state.lives = (std::max)(0, state.lives - 1);
+        state.invulnerability = 0.0f;
+        state.respawn = state.lives > 0 ? RESPAWN_DELAY : 0.0f;
+        if (state.lives > 0 && state.respawn <= 0.0f) RespawnPlayer_(i);
     }
+    if (!HasLivingPlayer_()) Finish_(false);
+    else if (m_enemyManager.GetError().empty() && m_enemyManager.GetTotalCount() > 0
+        && m_enemyManager.GetDefeatedCount() >= m_enemyManager.GetTotalCount()) Finish_(true);
 }
 
 int GameScene::GetTextWidth_(const char* text, int font) const
@@ -309,55 +306,82 @@ void GameScene::DrawCentered_(const char* text, int y, int color, int font) cons
     DrawText_((SCREEN_W - GetTextWidth_(text, font)) / 2, y, text, color, font);
 }
 
+void GameScene::DrawStageDebug_() const
+{
+    if (!m_showStageDebug || !m_stage.IsLoaded()) return;
+    for (const StageSolid& solid : m_stage.GetSolids())
+    {
+        bool bumped = false;
+        for (int i = 0; i < m_playerCount; ++i)
+            if (m_playerStates[i].lives > 0 && m_playerStates[i].respawn <= 0.0f
+                && m_players[i].GetLastBumpedObjectId() == solid.id) bumped = true;
+        const int color = bumped ? GetColor(255, 180, 40) : GetColor(80, 220, 160);
+        DrawBox(static_cast<int>(solid.x), static_cast<int>(solid.y),
+            static_cast<int>(solid.x + solid.width), static_cast<int>(solid.y + solid.height), color, FALSE);
+        DrawFormatString(static_cast<int>(solid.x) + 6, static_cast<int>(solid.y) + 4, color, "ID %d", solid.id);
+    }
+    DrawString(20, 150, "F3: COLLISION DEBUG", GetColor(80, 220, 160));
+}
+
 void GameScene::Draw()
 {
-    int playerAlpha = 255;
-    if (m_invulnerabilityTimer > 0.0f)
+    m_stageRenderer.Draw();
+    DrawStageDebug_();
+    for (int i = 0; i < m_playerCount; ++i)
     {
-        playerAlpha = 128;
-        // 無敵2秒のうち、最後の0.6秒は0.075秒ごとに半透明／非表示を切り替える。
-        const float blinkDuration = 0.6f;
-        const float blinkInterval = 0.075f;
-        if (m_invulnerabilityTimer <= blinkDuration)
-        {
-            const float blinkTime = blinkDuration - m_invulnerabilityTimer;
-            const int phase = static_cast<int>(blinkTime / blinkInterval);
-            if (phase % 2 != 0) playerAlpha = 0;
-        }
+        const PlayerState& state = m_playerStates[i];
+        if (state.lives <= 0 || state.respawn > 0.0f) continue;
+        int alpha = state.invulnerability > 0.0f ? 128 : 255;
+        if (state.invulnerability > 0.0f && state.invulnerability <= 0.6f
+            && static_cast<int>((0.6f - state.invulnerability) / 0.075f) % 2 != 0) alpha = 0;
+        m_players[i].Draw(alpha);
     }
-    if (m_respawnTimer > 0.0f) playerAlpha = 0;
-    m_player.Draw(playerAlpha);
     m_enemyManager.Draw();
     if (m_isBonus) DrawBonus_();
-    const int white = GetColor(235, 237, 225);
-    const int gold = GetColor(255, 201, 96);
+    const int white = GetColor(235, 237, 225), gold = GetColor(255, 201, 96);
     char text[160];
-    DrawText_(24, 12, "PLAYER 1", gold, m_hudFont);
-    std::snprintf(text, sizeof(text), "%06d", m_score);
-    DrawText_(24, 44, text, white, m_scoreFont);
-    std::snprintf(text, sizeof(text), "LIVES %d", m_lives);
-    DrawText_(24, 82, text, white, m_smallFont);
+    for (int i = 0; i < m_playerCount; ++i)
+    {
+        const PlayerState& state = m_playerStates[i];
+        const int color = i == 0 ? gold : GetColor(100, 215, 255);
+        const auto drawHud = [&](const char* label, int y, int font, int ink)
+        {
+            const int x = i == 0 ? 24 : SCREEN_W - 24 - GetTextWidth_(label, font);
+            DrawText_(x, y, label, ink, font);
+        };
+        std::snprintf(text, sizeof(text), "PLAYER %d", i + 1);
+        drawHud(text, 12, m_hudFont, color);
+        std::snprintf(text, sizeof(text), "%06d", state.score);
+        drawHud(text, 44, m_scoreFont, white);
+        if (state.lives > 0) std::snprintf(text, sizeof(text), "LIVES %d", state.lives);
+        else std::snprintf(text, sizeof(text), "OUT");
+        drawHud(text, 82, m_smallFont, white);
+    }
     std::snprintf(text, sizeof(text), "STAGE %02d", m_stageNumber);
-    DrawText_(SCREEN_W - 24 - GetTextWidth_(text, m_hudFont), 16, text, gold, m_hudFont);
+    if (m_playerCount == 2) DrawCentered_(text, 12, gold, m_hudFont);
+    else DrawText_(SCREEN_W - 24 - GetTextWidth_(text, m_hudFont), 16, text, gold, m_hudFont);
     if (m_stageTimeLimit > 0.0f)
     {
-        const int seconds = static_cast<int>(std::ceil(m_remainingTime));
-        std::snprintf(text, sizeof(text), m_isBonus ? "BONUS TIME %02d" : "TIME %03d", seconds);
-        DrawCentered_(text, 16, m_remainingTime <= 10.0f ? GetColor(255, 80, 80) : white, m_hudFont);
+        std::snprintf(text, sizeof(text), m_isBonus ? "BONUS TIME %02d" : "TIME %03d",
+            static_cast<int>(std::ceil(m_remainingTime)));
+        DrawCentered_(text, m_playerCount == 2 ? 48 : 16,
+            m_remainingTime <= 10.0f ? GetColor(255, 80, 80) : white, m_hudFont);
     }
-    // 大きくしたスコアと重ならないよう、補助情報は床より下へまとめる。
-    DrawText_(24, 646, "ARROWS / A,D: MOVE   SHIFT: RUN   SPACE: JUMP   F3: DEBUG   F4: STAGE   R: RESTART", white, m_smallFont);
+    DrawText_(24, 646, m_playerCount == 2
+        ? "P1: A,D / SPACE / L-SHIFT   P2: ARROWS / ENTER / R-SHIFT   F3: DEBUG   F4: STAGE   R: RESTART"
+        : "ARROWS / A,D: MOVE   SHIFT: RUN   SPACE: JUMP   F3: DEBUG   F4: STAGE   R: RESTART", white, m_smallFont);
     if (m_isBonus)
-        std::snprintf(text, sizeof(text), "COINS: %d / %d   PERFECT BONUS: %d", m_bonusCollected,
+        std::snprintf(text, sizeof(text), "COINS: %d / %d   PERFECT BONUS: %d EACH", m_bonusCollected,
             static_cast<int>(m_bonusCoins.size()), BONUS_PERFECT_SCORE);
     else
-        std::snprintf(text, sizeof(text), "DEFEATED: %d / %d   INVUL: %.1f",
-            m_enemyManager.GetDefeatedCount(), m_enemyManager.GetTotalCount(), m_invulnerabilityTimer);
+        std::snprintf(text, sizeof(text), "DEFEATED: %d / %d", m_enemyManager.GetDefeatedCount(), m_enemyManager.GetTotalCount());
     DrawText_(24, 670, text, white, m_smallFont);
-    if (!m_enemyManager.GetError().empty())
-        DrawText_(24, 622, m_enemyManager.GetError().c_str(), GetColor(255, 150, 120), m_smallFont);
-    if (!m_bonusError.empty())
-        DrawText_(24, 622, m_bonusError.c_str(), GetColor(255, 150, 120), m_smallFont);
+    std::string error = m_stageError;
+    if (!m_enemyManager.GetError().empty()) error = m_enemyManager.GetError();
+    if (!m_bonusError.empty()) error = m_bonusError;
+    for (int i = 0; i < m_playerCount; ++i)
+        if (!m_players[i].GetError().empty()) error = m_players[i].GetError();
+    if (!error.empty()) DrawText_(24, 622, error.c_str(), GetColor(255, 150, 120), m_smallFont);
     if (m_stageIntroTimer > 0.0f || m_isFinished)
     {
         char title[64];
@@ -401,53 +425,69 @@ bool GameScene::LoadBonusSprite_()
 
 void GameScene::UpdateBonus_(float dt, const Input& input)
 {
-    const Aabb before = m_player.GetAabb();
-    m_player.Update(dt, input);
-    const Aabb after = m_player.GetAabb();
+    Aabb before[2]{}, after[2]{};
+    for (int i = 0; i < m_playerCount; ++i)
+    {
+        if (m_playerStates[i].lives <= 0) continue;
+        before[i] = m_players[i].GetAabb();
+        m_players[i].Update(dt, input.ForPlayer(i, m_playerCount));
+        after[i] = m_players[i].GetAabb();
+    }
     m_bonusAnimationTime = std::fmod(m_bonusAnimationTime + dt, 0.6f);
-    const float fromX = (before.l + before.r) * 0.5f;
-    const float fromY = (before.t + before.b) * 0.5f;
-    float toX = (after.l + after.r) * 0.5f;
-    toX += std::round((fromX - toX) / SCREEN_W) * SCREEN_W;
-    const float toY = (after.t + after.b) * 0.5f;
-    const float halfX = (after.r - after.l + BONUS_COIN_SIZE) * 0.5f;
-    const float halfY = (after.b - after.t + BONUS_COIN_SIZE) * 0.5f;
     for (BonusCoin& coin : m_bonusCoins)
     {
         if (coin.collected) continue;
-        bool touched = false;
-        for (int copy = -1; copy <= 1 && !touched; ++copy)
+        int collector = -1;
+        float firstTouch = 2.0f;
+        for (int i = 0; i < m_playerCount; ++i)
         {
-            // 移動区間と拡張したコイン矩形を調べ、走行中の取り逃しを防ぐ。
-            const float center[] = { coin.x + copy * static_cast<float>(SCREEN_W), coin.y };
-            const float from[] = { fromX, fromY }, to[] = { toX, toY }, half[] = { halfX, halfY };
-            float enter = 0.0f, leave = 1.0f;
-            bool valid = true;
-            for (int axis = 0; axis < 2; ++axis)
+            if (m_playerStates[i].lives <= 0) continue;
+            const float fromX = (before[i].l + before[i].r) * 0.5f;
+            const float fromY = (before[i].t + before[i].b) * 0.5f;
+            float toX = (after[i].l + after[i].r) * 0.5f;
+            toX += std::round((fromX - toX) / SCREEN_W) * SCREEN_W;
+            const float toY = (after[i].t + after[i].b) * 0.5f;
+            const float halfX = (after[i].r - after[i].l + BONUS_COIN_SIZE) * 0.5f;
+            const float halfY = (after[i].b - after[i].t + BONUS_COIN_SIZE) * 0.5f;
+            for (int copy = -1; copy <= 1; ++copy)
             {
-                const float delta = to[axis] - from[axis];
-                const float low = center[axis] - half[axis], high = center[axis] + half[axis];
-                if (std::fabs(delta) < 0.00001f)
+                const float center[] = { coin.x + copy * static_cast<float>(SCREEN_W), coin.y };
+                const float from[] = { fromX, fromY }, to[] = { toX, toY }, half[] = { halfX, halfY };
+                float enter = 0.0f, leave = 1.0f;
+                bool valid = true;
+                for (int axis = 0; axis < 2; ++axis)
                 {
-                    if (from[axis] < low || from[axis] > high) valid = false;
+                    const float delta = to[axis] - from[axis];
+                    const float low = center[axis] - half[axis], high = center[axis] + half[axis];
+                    if (std::fabs(delta) < 0.00001f)
+                    {
+                        if (from[axis] < low || from[axis] > high) valid = false;
+                    }
+                    else
+                    {
+                        float a = (low - from[axis]) / delta, b = (high - from[axis]) / delta;
+                        if (a > b) std::swap(a, b);
+                        enter = (std::max)(enter, a);
+                        leave = (std::min)(leave, b);
+                        if (enter > leave) valid = false;
+                    }
                 }
-                else
-                {
-                    float a = (low - from[axis]) / delta, b = (high - from[axis]) / delta;
-                    if (a > b) { const float temp = a; a = b; b = temp; }
-                    if (a > enter) enter = a;
-                    if (b < leave) leave = b;
-                    if (enter > leave) valid = false;
-                }
+                // 同一コインは最初に到達した側だけへ加点する。
+                if (valid && enter < firstTouch) { firstTouch = enter; collector = i; }
             }
-            touched = valid;
         }
-        if (touched) { coin.collected = true; ++m_bonusCollected; }
+        if (collector >= 0)
+        {
+            coin.collected = true;
+            ++m_bonusCollected;
+            AddScore_(collector, BONUS_COIN_SCORE);
+        }
     }
-    m_score = m_stageStartScore + m_bonusCollected * BONUS_COIN_SCORE;
     if (!m_bonusCoins.empty() && m_bonusCollected == static_cast<int>(m_bonusCoins.size()))
     {
-        m_score += BONUS_PERFECT_SCORE;
+        // 全回収は協力報酬。残機のある参加者全員へ加点する。
+        for (int i = 0; i < m_playerCount; ++i)
+            if (m_playerStates[i].lives > 0) AddScore_(i, BONUS_PERFECT_SCORE);
         Finish_(true);
     }
 }
@@ -494,7 +534,8 @@ void GameScene::UpdateStageSelect_(const Input& input)
     if (!m_waitStageSelectRelease && input.Triggered(Action::Decide))
     {
         m_stageNumber = m_selectedStage;
-        if (m_lives <= 0) m_lives = INITIAL_LIVES;
+        if (!HasLivingPlayer_())
+            for (int i = 0; i < m_playerCount; ++i) m_playerStates[i].lives = INITIAL_LIVES;
         RestartStage_();
     }
 }

@@ -351,33 +351,48 @@ void EnemyManager::Kick_(Turtle& turtle, int direction)
     ++m_defeatedCount;
 }
 
-bool EnemyManager::Update(float dt, const StageData& stage, int bumpedSolidId,
-    float hitX, const Aabb& player, bool canHurtPlayer, bool playerActive)
+void EnemyManager::Update(float dt, StageData& stage, const PlayerContact* players,
+    ContactResult* results, int playerCount)
 {
-    if (!stage.IsLoaded() || !std::isfinite(dt) || dt <= 0.0f) return false;
+    for (int i = 0; i < playerCount; ++i) results[i] = ContactResult{};
+    if (!stage.IsLoaded() || !std::isfinite(dt) || dt <= 0.0f) return;
     ResolveEnemyContacts_(dt);
     for (Turtle& turtle : m_turtles) UpdateTurtle_(turtle, dt, stage);
-    ApplyBump_(stage, bumpedSolidId, hitX);
-    // 着地・復帰・転倒によって、このフレームで近づいた場合も処理する。
+    for (int i = 0; i < playerCount; ++i)
+    {
+        if (!players[i].active) continue;
+        const bool hitPow = stage.GetPowUses() > 0 && players[i].bumpedSolidId == stage.GetPow().id;
+        ApplyBump_(stage, players[i].bumpedSolidId, players[i].hitX);
+        if (hitPow) stage.UsePow();
+    }
     ResolveEnemyContacts_(0.0f);
-    if (!playerActive) return false;
-    bool playerHit = false;
     for (Turtle& turtle : m_turtles)
     {
-        if (!turtle.active || turtle.state == State::Defeated || turtle.state == State::Respawning || !TouchesPlayer_(turtle, player)) continue;
-        if (turtle.state == State::Overturned || turtle.state == State::Recovering)
+        if (!turtle.active || turtle.state == State::Defeated || turtle.state == State::Respawning) continue;
+        // 1体に両者が同時接触した場合は中心が近い側。完全同距離なら1P。
+        int kicker = -1;
+        float nearest = static_cast<float>(SCREEN_W);
+        for (int i = 0; i < playerCount; ++i)
         {
+            if (!players[i].active || !TouchesPlayer_(turtle, players[i].body)) continue;
+            if (turtle.state == State::Overturned || turtle.state == State::Recovering)
+            {
+                float distance = (players[i].body.l + players[i].body.r) * 0.5f - (turtle.x + turtle.width * 0.5f);
+                distance -= std::round(distance / SCREEN_W) * SCREEN_W;
+                if (std::fabs(distance) < nearest) { nearest = std::fabs(distance); kicker = i; }
+            }
+            else if (players[i].canHurt) results[i].hit = true;
+        }
+        if (kicker >= 0)
+        {
+            const Aabb& player = players[kicker].body;
             const float playerCenter = (player.l + player.r) * 0.5f;
             float enemyCenter = turtle.x + turtle.width * 0.5f;
             enemyCenter += std::round((playerCenter - enemyCenter) / SCREEN_W) * SCREEN_W;
             Kick_(turtle, playerCenter <= enemyCenter ? 1 : -1);
-        }
-        else if (canHurtPlayer)
-        {
-            playerHit = true;
+            ++results[kicker].defeated;
         }
     }
-    return playerHit;
 }
 
 int EnemyManager::GetFrame_(const Turtle& turtle) const

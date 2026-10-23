@@ -63,16 +63,17 @@ void TitleScene::Update(float dt, const Input& input)
         }
         return;
     }
-    if (input.Triggered(Action::Up)) m_selected = (m_selected + 2) % 3;
-    else if (input.Triggered(Action::Down)) m_selected = (m_selected + 1) % 3;
+    if (input.Triggered(Action::Up)) m_selected = (m_selected + 3) % 4;
+    else if (input.Triggered(Action::Down)) m_selected = (m_selected + 1) % 4;
     if (!decide) return;
     Audio::Instance().PlaySe("decide");
-    if (m_selected == 0)
+    if (m_selected <= 1)
     {
         m_actionRequested = true;
+        m_mgr->Context().playerCount = m_selected + 1;
         m_mgr->RequestChange(SceneType::Game);
     }
-    else if (m_selected == 1)
+    else if (m_selected == 2)
     {
         m_showHelp = true;
         m_waitDecideRelease = true;
@@ -107,13 +108,14 @@ void TitleScene::DrawHelp_() const
     const int white = GetColor(235, 237, 225);
     const int gold = GetColor(255, 201, 96);
     DrawCentered_("HOW TO PLAY", 162, gold, m_headerFont);
-    DrawCentered_("LEFT / RIGHT   :   MOVE", 230, white, m_menuFont);
-    DrawCentered_("SHIFT + MOVE   :   RUN", 270, white, m_menuFont);
-    DrawCentered_("SPACE   :   JUMP", 310, white, m_menuFont);
-    DrawCentered_("Hold SPACE for a higher jump.", 350, white, m_smallFont);
-    DrawCentered_("1. Hit the platform from below to flip a turtle.", 408, gold, m_smallFont);
-    DrawCentered_("2. Touch the overturned turtle to kick it away.", 440, gold, m_smallFont);
-    DrawCentered_("Defeat every turtle to reach the next stage!", 484, white, m_smallFont);
+    DrawCentered_("1 PLAYER: ARROWS / A,D   SHIFT   SPACE", 224, white, m_smallFont);
+    DrawCentered_("2 PLAYERS", 264, gold, m_menuFont);
+    DrawCentered_("P1: A / D   L-SHIFT: RUN   SPACE: JUMP", 306, white, m_smallFont);
+    DrawCentered_("P2: LEFT / RIGHT   R-SHIFT: RUN   ENTER: JUMP", 340, white, m_smallFont);
+    DrawCentered_("PAD 1 / 2: MOVE   BUTTON 1: JUMP   BUTTON 2: RUN", 378, white, m_smallFont);
+    DrawCentered_("Hit platforms from below, then touch flipped enemies.", 424, gold, m_smallFont);
+    DrawCentered_("Crabs need two hits. POW affects grounded enemies.", 456, white, m_smallFont);
+    DrawCentered_("Scores and lives are separate. Defeat all enemies together!", 488, white, m_smallFont);
     DrawCentered_("ENTER / SPACE: BACK     ESC: QUIT", 558, gold, m_smallFont);
 }
 
@@ -134,10 +136,10 @@ void TitleScene::Draw()
 
     int mode = DX_BLENDMODE_NOBLEND, param = 0;
     GetDrawBlendMode(&mode, &param);
-    const char* labels[] = { "START GAME", "HOW TO PLAY", "EXIT" };
-    for (int i = 0; i < 3; ++i)
+    const char* labels[] = { "1 PLAYER", "2 PLAYERS", "HOW TO PLAY", "EXIT" };
+    for (int i = 0; i < 4; ++i)
     {
-        const int y = 384 + i * 64;
+        const int y = 376 + i * 58;
         const bool selected = i == m_selected;
         SetDrawBlendMode(DX_BLENDMODE_ALPHA, selected ? 245 : 215);
         DrawBox(450, y, 830, y + 50, selected ? GetColor(225, 147, 43) : GetColor(12, 31, 38), TRUE);

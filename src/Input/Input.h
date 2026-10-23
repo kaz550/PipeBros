@@ -29,6 +29,8 @@ class Input
 {
 public:
     void Update();
+    // ゲーム用の入力を分離。1人時は従来のWASD・矢印を両方利用できる。
+    Input ForPlayer(int playerIndex, int playerCount) const;
 
     bool Pressed(Action a) const;
     bool Triggered(Action a) const;
@@ -40,12 +42,14 @@ public:
 private:
     std::array<int, (int)Action::COUNT> m_prev{};
     std::array<int, (int)Action::COUNT> m_curr{};
+    std::array<int, (int)Action::COUNT> m_singlePrev{}, m_singleCurr{};
+    std::array<std::array<int, (int)Action::COUNT>, 2> m_playerPrev{}, m_playerCurr{};
     float m_moveX = 0.0f;
     float m_moveY = 0.0f;
 
     int GetActionDown_(Action a, int pad) const;
 
-    int GetPadState_() const;
+    void SetMoveAxes_();
     static int IsKeyDown_(int key);
     static int IsBitOn_(int state, int bit);
 };

@@ -105,11 +105,24 @@ void ResultScene::Draw()
     DrawCentered_(title, 162, gold, m_headerFont);
     if (m_isNew) DrawCentered_("NEW RECORD!", 200, gold, m_smallFont);
     char text[96];
-    std::snprintf(text, sizeof(text), "SCORE    %06.0f", context.lastScore);
-    DrawCentered_(text, 226, white, m_menuFont);
+    if (context.playerCount == 2)
+    {
+        std::snprintf(text, sizeof(text), "PLAYER 1   %06d          PLAYER 2   %06d",
+            context.playerScores[0], context.playerScores[1]);
+        DrawCentered_(text, 230, white, m_smallFont);
+    }
+    else
+    {
+        std::snprintf(text, sizeof(text), "SCORE    %06.0f", context.lastScore);
+        DrawCentered_(text, 226, white, m_menuFont);
+    }
     std::snprintf(text, sizeof(text), "HI-SCORE    %06.0f", context.hiScore);
     DrawCentered_(text, 262, gold, m_menuFont);
-    std::snprintf(text, sizeof(text), "STAGE %02d     LIVES %d", context.stageIndex + 1, context.lastLives);
+    if (context.playerCount == 2)
+        std::snprintf(text, sizeof(text), "STAGE %02d    P1 LIVES %d    P2 LIVES %d",
+            context.stageIndex + 1, context.playerLives[0], context.playerLives[1]);
+    else
+        std::snprintf(text, sizeof(text), "STAGE %02d     LIVES %d", context.stageIndex + 1, context.lastLives);
     DrawCentered_(text, 306, white, m_smallFont);
     std::snprintf(text, sizeof(text), "DEFEATED    %d / %d", context.lastDefeated, context.lastEnemyCount);
     DrawCentered_(text, 338, white, m_smallFont);

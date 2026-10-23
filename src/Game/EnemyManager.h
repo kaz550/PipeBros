@@ -15,10 +15,19 @@ public:
     EnemyManager(const EnemyManager&) = delete;
     EnemyManager& operator=(const EnemyManager&) = delete;
     void Reset(const StageData& stage, Lineup lineup = Lineup::FromMap);
-    // 通常状態の敵と接触し、プレイヤーにミスが発生した場合はtrue。
-    // playerActive=falseでは敵だけを更新し、プレイヤーへの接触・蹴り判定を省く。
-    bool Update(float dt, const StageData& stage, int bumpedSolidId,
-        float hitX, const Aabb& player, bool canHurtPlayer, bool playerActive = true);
+    struct PlayerContact
+    {
+        Aabb body{};
+        int bumpedSolidId = -1;
+        float hitX = 0.0f;
+        bool canHurt = false;
+        bool active = false;
+    };
+    struct ContactResult { bool hit = false; int defeated = 0; };
+    // 敵の時間を1回だけ進め、全員の打撃後に接触を調べる。
+    // POWは衝撃を伝えてから共有のStageDataで消費する。
+    void Update(float dt, StageData& stage, const PlayerContact* players,
+        ContactResult* results, int playerCount);
     void Draw() const;
     int GetDefeatedCount() const { return m_defeatedCount; }
     int GetTotalCount() const { return static_cast<int>(m_turtles.size()); }

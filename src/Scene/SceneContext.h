@@ -11,7 +11,13 @@ enum class ResultKind
 
 struct SceneContext
 {
-    float lastScore = 0.0f;
+    // タイトルで選び、リトライでも保持する。
+    int playerCount = 1;
+    int playerScores[2] = { 0, 0 };
+    int playerLives[2] = { 0, 0 };
+    int playerHits[2] = { 0, 0 };
+    int playerDefeated[2] = { 0, 0 }; // 今回のステージ
+    float lastScore = 0.0f; // 1人時は従来どおり。2人時は高い方の個人得点。
     float hiScore = 0.0f;
 
     // ゲーム終了時にリザルトへ渡す情報。

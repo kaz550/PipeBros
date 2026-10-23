@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "Aabb.h"
 #include "StageData.h"
-#include "StageRenderer.h"
+
 
 class Input;
 
@@ -13,18 +13,13 @@ public:
     Player(const Player&) = delete;
     Player& operator=(const Player&) = delete;
 
-    void Reset(float x, float groundY);
+    void Reset(const StageData& stage, int playerIndex);
     void Update(float dt, const Input& input);
     // alpha: 0なら非表示、255なら通常表示。ステージには適用しない。
     void Draw(int alpha = 255) const;
     void Respawn();
-    // GameSceneでPOWの衝撃を敵へ適用した後に呼ぶ。
-    void UsePow();
-    bool IsStageDebugVisible() const { return m_showStageDebug; }
-    void SetStageDebugVisible(bool visible) { m_showStageDebug = visible; }
-    void UpdateVisualEffects(float dt);
     Aabb GetAabb() const;
-    const StageData& GetStageData() const { return m_stage; }
+    const std::string& GetError() const { return m_error; }
 
     float GetX() const { return m_x; }
     float GetY() const { return m_y; }
@@ -69,10 +64,10 @@ private:
 
     float m_respawnX = 220.0f;
     float m_respawnFootY = 620.0f;
-    StageData m_stage;
-    StageRenderer m_stageRenderer;
+    const StageData* m_stage = nullptr;
+    int m_playerIndex = 0;
+    std::string m_error;
     int m_lastBumpedObjectId = -1;
-    bool m_showStageDebug = false;
 
     int m_spriteSheet = -1, m_frameIndex = 0;
     float m_spriteScale = 0.34f;

@@ -4,6 +4,7 @@
 #include <vector>
 #include "../Game/Player.h"
 #include "../Game/EnemyManager.h"
+#include "../Game/StageRenderer.h"
 
 class SceneManager;
 class Input;
@@ -19,6 +20,14 @@ public:
 
 private:
     struct BonusCoin { float x, y; bool collected = false; };
+    struct PlayerState
+    {
+        int lives = 0, score = 0, hits = 0, defeated = 0;
+        float invulnerability = 0.0f, respawn = 0.0f;
+    };
+    bool HasLivingPlayer_() const;
+    void AddScore_(int playerIndex, int points);
+    void DrawStageDebug_() const;
     bool LoadBonusSprite_();
     void UpdateBonus_(float dt, const Input& input);
     void DrawBonus_() const;
@@ -31,10 +40,8 @@ private:
     static EnemyManager::Lineup GetStageLineup_(int stageNumber);
     static float GetStageTimeLimit_(int stageNumber);
     void RestartStage_();
-    void RespawnPlayer_();
+    void RespawnPlayer_(int playerIndex);
     void Finish_(bool stageClear);
-    static constexpr float GROUND_Y = 620.0f;
-    static constexpr float PLAYER_START_X = 220.0f;
     static constexpr float STAGE_INTRO_DURATION = 1.5f;
     static constexpr float STAGE_CLEAR_DURATION = 1.2f;
     // ミスから復活までの秒数。0.0fなら従来の即時復活。
@@ -59,10 +66,15 @@ private:
     int m_scoreFont = -1;
     int m_smallFont = -1;
     SceneManager* m_mgr = nullptr;
-    Player m_player;
+    // ステージとPOWは全員で共有。描画・演出も1回だけ更新する。
+    StageData m_stage;
+    StageRenderer m_stageRenderer;
+    Player m_players[2];
+    PlayerState m_playerStates[2];
+    int m_playerCount = 1;
+    bool m_showStageDebug = false;
+    std::string m_stageError;
     EnemyManager m_enemyManager;
-    float m_invulnerabilityTimer = 0.0f;
-    float m_respawnTimer = 0.0f;
     // 0秒なら制限なし。正の値なら残り時間表示とタイムアップ処理を有効にする。
     float m_stageTimeLimit = 0.0f;
     float m_remainingTime = 0.0f;
@@ -70,10 +82,6 @@ private:
     float m_finishTimer = 0.0f;
     float m_stageIntroTimer = STAGE_INTRO_DURATION;
     int m_stageNumber = 1;
-    int m_lives = INITIAL_LIVES;
-    int m_score = 0;
-    int m_stageStartScore = 0;
-    int m_hitCount = 0;
     bool m_isFinished = false;
     bool m_isClear = false;
     bool m_resultRequested = false;

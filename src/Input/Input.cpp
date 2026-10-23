@@ -11,11 +11,6 @@ int Input::IsBitOn_(int state, int bit)
     return (state & bit) ? 1 : 0;
 }
 
-int Input::GetPadState_() const
-{
-    return GetJoypadInputState(DX_INPUT_KEY_PAD1);
-}
-
 int Input::GetActionDown_(Action a, int pad) const
 {
     const int padLeft = IsBitOn_(pad, PAD_INPUT_LEFT);
@@ -70,18 +65,51 @@ int Input::GetActionDown_(Action a, int pad) const
 void Input::Update()
 {
     m_prev = m_curr;
-    const int pad = GetPadState_();
-
+    m_singlePrev = m_singleCurr;
+    m_playerPrev = m_playerCurr;
+    // KEY_PAD1は矢印キーも含むため使わない。物理パッドを個別に読む。
+    const int pads[] = { GetJoypadInputState(DX_INPUT_PAD1), GetJoypadInputState(DX_INPUT_PAD2) };
     for (int i = 0; i < (int)Action::COUNT; ++i)
-        m_curr[i] = GetActionDown_((Action)i, pad);
+        m_curr[i] = GetActionDown_((Action)i, pads[0] | pads[1]);
+    m_singleCurr = m_curr;
+    m_singleCurr[(int)Action::Left] = IsKeyDown_(KEY_INPUT_LEFT) || IsKeyDown_(KEY_INPUT_A) || IsBitOn_(pads[0], PAD_INPUT_LEFT);
+    m_singleCurr[(int)Action::Right] = IsKeyDown_(KEY_INPUT_RIGHT) || IsKeyDown_(KEY_INPUT_D) || IsBitOn_(pads[0], PAD_INPUT_RIGHT);
+    m_singleCurr[(int)Action::Jump] = IsKeyDown_(KEY_INPUT_SPACE) || IsBitOn_(pads[0], PAD_INPUT_1);
+    m_singleCurr[(int)Action::Run] = IsKeyDown_(KEY_INPUT_LSHIFT) || IsKeyDown_(KEY_INPUT_RSHIFT) || IsBitOn_(pads[0], PAD_INPUT_2);
+    m_playerCurr[0] = m_playerCurr[1] = m_curr;
+    m_playerCurr[0][(int)Action::Left] = IsKeyDown_(KEY_INPUT_A) || IsBitOn_(pads[0], PAD_INPUT_LEFT);
+    m_playerCurr[0][(int)Action::Right] = IsKeyDown_(KEY_INPUT_D) || IsBitOn_(pads[0], PAD_INPUT_RIGHT);
+    m_playerCurr[0][(int)Action::Jump] = IsKeyDown_(KEY_INPUT_SPACE) || IsBitOn_(pads[0], PAD_INPUT_1);
+    m_playerCurr[0][(int)Action::Run] = IsKeyDown_(KEY_INPUT_LSHIFT) || IsBitOn_(pads[0], PAD_INPUT_2);
+    m_playerCurr[1][(int)Action::Left] = IsKeyDown_(KEY_INPUT_LEFT) || IsBitOn_(pads[1], PAD_INPUT_LEFT);
+    m_playerCurr[1][(int)Action::Right] = IsKeyDown_(KEY_INPUT_RIGHT) || IsBitOn_(pads[1], PAD_INPUT_RIGHT);
+    m_playerCurr[1][(int)Action::Jump] = IsKeyDown_(KEY_INPUT_RETURN) || IsBitOn_(pads[1], PAD_INPUT_1);
+    m_playerCurr[1][(int)Action::Run] = IsKeyDown_(KEY_INPUT_RSHIFT) || IsBitOn_(pads[1], PAD_INPUT_2);
+    SetMoveAxes_();
+}
 
-    m_moveX = 0.0f;
-    if (Pressed(Action::Left))  m_moveX -= 1.0f;
-    if (Pressed(Action::Right)) m_moveX += 1.0f;
+Input Input::ForPlayer(int playerIndex, int playerCount) const
+{
+    Input result = *this;
+    if (playerCount <= 1)
+    {
+        result.m_prev = m_singlePrev;
+        result.m_curr = m_singleCurr;
+    }
+    else
+    {
+        const int index = playerIndex == 1 ? 1 : 0;
+        result.m_prev = m_playerPrev[index];
+        result.m_curr = m_playerCurr[index];
+    }
+    result.SetMoveAxes_();
+    return result;
+}
 
-    m_moveY = 0.0f;
-    if (Pressed(Action::Up))    m_moveY -= 1.0f;
-    if (Pressed(Action::Down))  m_moveY += 1.0f;
+void Input::SetMoveAxes_()
+{
+    m_moveX = (Pressed(Action::Right) ? 1.0f : 0.0f) - (Pressed(Action::Left) ? 1.0f : 0.0f);
+    m_moveY = (Pressed(Action::Down) ? 1.0f : 0.0f) - (Pressed(Action::Up) ? 1.0f : 0.0f);
 }
 
 bool Input::Pressed(Action a) const { return m_curr[(int)a] != 0; }

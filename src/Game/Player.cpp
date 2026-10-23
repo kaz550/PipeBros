@@ -29,15 +29,14 @@ bool Player::LoadSprite_()
         return true;
     }
 
-    m_spriteSheet = LoadGraph(
-        "assets/images/pipe_bros.png"
-    );
+    const char* path = m_playerIndex == 1
+        ? "assets/images/pipe_bros_2p.png" : "assets/images/pipe_bros.png";
+    m_spriteSheet = LoadGraph(path);
 
     if (m_spriteSheet == -1)
     {
-        printfDx(
-            "Failed to load: assets/images/pipe_bros.png\n"
-        );
+        m_error = std::string("Failed to load: ") + path;
+        printfDx("%s\n", m_error.c_str());
         return false;
     }
 
@@ -51,9 +50,8 @@ bool Player::LoadSprite_()
 
     if (!valid)
     {
-        printfDx(
-            "pipe_bros.png must be 1402 x 1122 pixels.\n"
-        );
+        m_error = std::string(path) + " must be 1402 x 1122 pixels.";
+        printfDx("%s\n", m_error.c_str());
 
         DeleteGraph(m_spriteSheet);
         m_spriteSheet = -1;
@@ -63,38 +61,25 @@ bool Player::LoadSprite_()
     return true;
 }
 
-void Player::Reset(float x, float groundY)
+void Player::Reset(const StageData& stage, int playerIndex)
 {
+    if (playerIndex != m_playerIndex && m_spriteSheet != -1)
+    {
+        if (DxLib_IsInit() != 0) DeleteGraph(m_spriteSheet);
+        m_spriteSheet = -1;
+    }
+    m_playerIndex = playerIndex;
+    m_stage = &stage;
+    m_error.clear();
     LoadSprite_();
-
-    const bool stageLoaded = m_stage.Load("assets/stages/stage01.tmx");
-    if (!stageLoaded)
-    {
-        printfDx("Stage load failed: %s\n", m_stage.GetError().c_str());
-    }
-
-    const bool stageImagesLoaded = m_stageRenderer.Load("assets/stages/stage01.tmx");
-    if (!stageImagesLoaded)
-    {
-        printfDx("Stage image load failed: %s\n", m_stageRenderer.GetError().c_str());
-    }
-
-    m_x = x;
-    m_groundY = groundY;
-    m_y = groundY - m_height;
-    if (stageLoaded)
-    {
-        m_x = m_stage.GetPlayerX();
-        m_y = m_stage.GetPlayerFootY() - m_height;
-        m_groundY = m_stage.GetGroundY();
-    }
-    // 初回位置とミス後の再出現位置を分ける。TMXのXは再出現時の中心。
-    m_respawnX = stageLoaded
-        ? m_stage.GetPlayerRespawnCenterX() - m_width * 0.5f
+    m_groundY = stage.IsLoaded() ? stage.GetGroundY() : 620.0f;
+    m_x = stage.IsLoaded() ? stage.GetPlayerX() : 220.0f;
+    if (playerIndex == 1) m_x = SCREEN_W - m_x - m_width;
+    m_y = (stage.IsLoaded() ? stage.GetPlayerFootY() : m_groundY) - m_height;
+    m_respawnX = stage.IsLoaded() ? stage.GetPlayerRespawnCenterX() - m_width * 0.5f
         : (SCREEN_W - m_width) * 0.5f;
-    m_respawnFootY = stageLoaded ? m_stage.GetPlayerRespawnFootY() : groundY;
+    m_respawnFootY = stage.IsLoaded() ? stage.GetPlayerRespawnFootY() : m_groundY;
     m_lastBumpedObjectId = -1;
-    m_showStageDebug = !stageImagesLoaded;
 
     m_vx = 0.0f;
     m_vy = 0.0f;
@@ -104,7 +89,7 @@ void Player::Reset(float x, float groundY)
     m_jumpHoldTimer = 0.0f;
 
     m_isRunning = false;
-    m_facingLeft = false;
+    m_facingLeft = m_playerIndex == 1;
 
     m_animation = Animation::Idle;
     m_animationTimer = 0.0f;
@@ -114,24 +99,12 @@ void Player::Reset(float x, float groundY)
     m_landingTimer = 0.0f;
 }
 
-void Player::UpdateVisualEffects(float dt)
-{
-    // 終了待ち中は操作・物理を止め、足場の演出だけを元に戻す。
-    m_stageRenderer.Update(dt);
-}
-
-void Player::UsePow()
-{
-    if (m_stage.UsePow())
-        m_stageRenderer.SetPowState(m_stage.GetPow(), m_stage.GetPowUses());
-}
-
 void Player::Respawn()
 {
     // 画像やTMXを再読み込みせず、現在のPOWの状態に応じて復帰先を選ぶ。
-    if (m_stage.IsLoaded() && m_stage.GetPowUses() > 0)
+    if (m_stage && m_stage->IsLoaded() && m_stage->GetPowUses() > 0)
     {
-        const StageSolid& pow = m_stage.GetPow();
+        const StageSolid& pow = m_stage->GetPow();
         m_x = pow.x + (pow.width - m_width) * 0.5f;
         m_y = pow.y - m_height;
     }
@@ -146,7 +119,7 @@ void Player::Respawn()
     m_isJumpHolding = false;
     m_jumpHoldTimer = 0.0f;
     m_isRunning = false;
-    m_facingLeft = false;
+    m_facingLeft = m_playerIndex == 1;
     m_animation = Animation::Idle;
     m_animationTimer = 0.0f;
     m_frameIndex = 0;
@@ -161,7 +134,6 @@ void Player::Update(float dt, const Input& input)
         return;
     }
 
-    m_stageRenderer.Update(dt);
 
     m_lastBumpedObjectId = -1;
 
@@ -182,18 +154,6 @@ void Player::Update(float dt, const Input& input)
     ApplyGravity_(dt);
     UpdatePosition_(dt);
     ClampToGround_();
-
-    if (m_lastBumpedObjectId != -1)
-    {
-        for (const StageSolid& solid : m_stage.GetSolids())
-        {
-            if (solid.id == m_lastBumpedObjectId)
-            {
-                m_stageRenderer.Bump(solid, m_x + m_width * 0.5f);
-                break;
-            }
-        }
-    }
 
     if (!wasGrounded && m_isGrounded)
     {
@@ -305,10 +265,10 @@ void Player::ApplyGravity_(float dt)
 
 void Player::UpdatePosition_(float dt)
 {
-    if (m_stage.IsLoaded())
+    if (m_stage && m_stage->IsLoaded())
     {
         const float previousVelocityY = m_vy;
-        m_stage.Move(m_x, m_y, m_vx, m_vy,
+        m_stage->Move(m_x, m_y, m_vx, m_vy,
             m_width, m_height, dt, static_cast<float>(SCREEN_W),
             m_isGrounded, m_lastBumpedObjectId);
         if (m_isGrounded || (previousVelocityY < 0.0f && m_vy == 0.0f))
@@ -339,7 +299,7 @@ void Player::UpdatePosition_(float dt)
 
 void Player::ClampToGround_()
 {
-    if (m_stage.IsLoaded())
+    if (m_stage && m_stage->IsLoaded())
     {
         return; // 接地状態はTMXの足場判定で確定している。
     }
@@ -447,23 +407,6 @@ void Player::UpdateAnimation_(float dt)
 
 void Player::Draw(int alpha) const
 {
-    m_stageRenderer.Draw();
-
-    // 足場画像と当たり判定の重なりを確認する表示。F3で切り替える。
-    if (m_showStageDebug && m_stage.IsLoaded())
-    {
-        for (const StageSolid& solid : m_stage.GetSolids())
-        {
-            const int color = solid.id == m_lastBumpedObjectId
-                ? GetColor(255, 180, 40) : GetColor(80, 220, 160);
-            DrawBox(static_cast<int>(solid.x), static_cast<int>(solid.y),
-                static_cast<int>(solid.x + solid.width),
-                static_cast<int>(solid.y + solid.height), color, FALSE);
-            DrawFormatString(static_cast<int>(solid.x) + 6,
-                static_cast<int>(solid.y) + 4, color, "ID %d", solid.id);
-        }
-        DrawString(20, 150, "F3: COLLISION DEBUG", GetColor(80, 220, 160));
-    }
     if (m_spriteSheet == -1 || alpha <= 0)
     {
         return;
