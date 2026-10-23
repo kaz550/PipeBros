@@ -5,7 +5,7 @@
 
 class StageData;
 
-// 画像ハンドルを共有し、カメ型の敵を管理する。
+// 種類ごとに画像ハンドルを共有し、カメとカニを管理する。
 class EnemyManager
 {
 public:
@@ -23,9 +23,13 @@ public:
     const std::string& GetError() const { return m_error; }
 
 private:
+    enum class Kind { Turtle, Crab };
     enum class State { Walking, Overturned, Recovering, Defeated, Respawning };
+    // 既存の移動・衝突処理を共有するため、内部名Turtleを維持する。
     struct Turtle
     {
+        Kind kind = Kind::Turtle;
+        bool angry = false;
         float x = 0.0f, y = 0.0f;
         float vx = 0.0f, vy = 0.0f;
         float width = 48.0f, height = 36.0f;
@@ -47,6 +51,7 @@ private:
     static constexpr int MAX_SPEED_LEVEL = 4;
     static float GetWalkSpeed_(const Turtle& turtle);
     bool LoadSprite_();
+    bool LoadCrabSprite_();
     void RespawnTurtle_(Turtle& turtle, const StageData& stage, int spawnIndex);
     bool TryExit_(Turtle& turtle, const StageData& stage, float dt);
     void UpdateTurtle_(Turtle& turtle, float dt, const StageData& stage);
@@ -58,6 +63,7 @@ private:
     int GetFrame_(const Turtle& turtle) const;
     std::vector<Turtle> m_turtles;
     int m_spriteSheet = -1;
+    int m_crabSpriteSheet = -1;
     int m_defeatedCount = 0;
     std::string m_error;
 };

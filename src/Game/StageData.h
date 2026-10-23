@@ -19,6 +19,7 @@ bool ReadStagePow(const tinyxml2::XMLElement* map, StageSolid& pow, std::string&
 struct StageEnemySpawn
 {
     std::string name;
+    std::string enemyType = "turtle";
     float x = 0.0f;
     float footY = 0.0f;
     int direction = 1;

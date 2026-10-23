@@ -136,6 +136,16 @@ bool StageData::Load(const char* filename)
                             property; property = property->NextSiblingElement("property"))
                         {
                             const char* key = property->Attribute("name");
+                            if (!isExit && key && std::strcmp(key, "enemyType") == 0)
+                            {
+                                const char* value = property->Attribute("value");
+                                if (!value || (std::strcmp(value, "turtle") != 0 && std::strcmp(value, "crab") != 0))
+                                {
+                                    m_error = "EnemySpawn enemyType must be turtle or crab.";
+                                    return false;
+                                }
+                                spawn.enemyType = value;
+                            }
                             if (key && std::strcmp(key, "direction") == 0)
                             {
                                 if (property->QueryIntAttribute("value", &spawn.direction) != tinyxml2::XML_SUCCESS

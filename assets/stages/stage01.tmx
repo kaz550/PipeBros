@@ -109,6 +109,9 @@
       <point />
     </object>
     <object id="9" name="EnemyRight" type="EnemySpawn" x="1184" y="140">
+      <properties>
+        <property name="enemyType" value="crab" />
+      </properties>
       <point />
     </object>
     <object id="11" name="EnemyExitLeft" type="EnemyExit" x="96" y="620">

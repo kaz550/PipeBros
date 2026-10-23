@@ -8,13 +8,16 @@ EnemyManager::~EnemyManager()
 {
     if (m_spriteSheet != -1 && DxLib_IsInit() != 0)
         DeleteGraph(m_spriteSheet);
+    if (m_crabSpriteSheet != -1 && DxLib_IsInit() != 0)
+        DeleteGraph(m_crabSpriteSheet);
 }
 
 float EnemyManager::GetWalkSpeed_(const Turtle& turtle)
 {
     int level = turtle.completedLoops / LOOPS_PER_SPEEDUP;
     if (level > MAX_SPEED_LEVEL) level = MAX_SPEED_LEVEL;
-    return BASE_WALK_SPEED * (1.0f + SPEED_GAIN_PER_LEVEL * level);
+    const float angerRate = turtle.kind == Kind::Crab && turtle.angry ? 1.5f : 1.0f;
+    return BASE_WALK_SPEED * (1.0f + SPEED_GAIN_PER_LEVEL * level) * angerRate;
 }
 
 bool EnemyManager::LoadSprite_()
@@ -42,6 +45,28 @@ bool EnemyManager::LoadSprite_()
     return true;
 }
 
+bool EnemyManager::LoadCrabSprite_()
+{
+    if (m_crabSpriteSheet != -1) return true;
+    m_crabSpriteSheet = LoadGraph("asset/images/enemy_crab.png");
+    if (m_crabSpriteSheet == -1)
+        m_crabSpriteSheet = LoadGraph("assets/images/enemy_crab.png");
+    if (m_crabSpriteSheet == -1)
+    {
+        m_error = "Could not load asset/images/enemy_crab.png (or assets/images/).";
+        return false;
+    }
+    int width = 0, height = 0;
+    if (GetGraphSize(m_crabSpriteSheet, &width, &height) == -1 || width != 1536 || height != 1024)
+    {
+        m_error = "enemy_crab.png must be the supplied 1536 x 1024 image.";
+        DeleteGraph(m_crabSpriteSheet);
+        m_crabSpriteSheet = -1;
+        return false;
+    }
+    return true;
+}
+
 void EnemyManager::Reset(const StageData& stage)
 {
     m_turtles.clear();
@@ -52,10 +77,18 @@ void EnemyManager::Reset(const StageData& stage)
         m_error = "Stage data is not loaded.";
         return;
     }
-    if (!LoadSprite_()) return;
+    bool needsTurtle = false, needsCrab = false;
+    for (const StageEnemySpawn& spawn : stage.GetEnemySpawns())
+    {
+        if (spawn.enemyType == "crab") needsCrab = true;
+        else needsTurtle = true;
+    }
+    if (needsTurtle && !LoadSprite_()) return;
+    if (needsCrab && !LoadCrabSprite_()) return;
     for (int i = 0; i < static_cast<int>(stage.GetEnemySpawns().size()); ++i)
     {
         Turtle turtle;
+        turtle.kind = stage.GetEnemySpawns()[i].enemyType == "crab" ? Kind::Crab : Kind::Turtle;
         RespawnTurtle_(turtle, stage, i);
         m_turtles.push_back(turtle);
     }
@@ -69,7 +102,12 @@ void EnemyManager::RespawnTurtle_(Turtle& turtle, const StageData& stage, int sp
     if (spawnIndex < 0 || spawnIndex >= static_cast<int>(spawns.size())) spawnIndex = 0;
     const StageEnemySpawn& spawn = spawns[spawnIndex];
     const int completedLoops = turtle.completedLoops;
+    const Kind kind = turtle.kind;
+    const bool angry = turtle.angry;
     turtle = Turtle{};
+    turtle.kind = kind;
+    turtle.angry = angry;
+    if (kind == Kind::Crab) turtle.width = 56.0f;
     turtle.completedLoops = completedLoops;
     turtle.spawnIndex = spawnIndex;
     turtle.x = spawn.x - turtle.width * 0.5f;
@@ -152,6 +190,7 @@ void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stag
         if (turtle.stateTime <= 0.0f)
         {
             turtle.state = State::Walking;
+            turtle.angry = false;
             turtle.animationTime = 0.0f;
         }
     }
@@ -212,16 +251,27 @@ void EnemyManager::ApplyHit_(Turtle& turtle)
 {
     if (!turtle.active || !turtle.grounded
         || turtle.state == State::Defeated || turtle.state == State::Respawning) return;
-    // 通常時は転倒、転倒・復帰中ならもう一度叩くと通常状態へ戻す。
     if (turtle.state == State::Walking)
     {
-        turtle.state = State::Overturned;
-        turtle.stateTime = 6.0f;
+        if (turtle.kind == Kind::Crab && !turtle.angry)
+        {
+            // カニの1回目は赤く怒って加速。次の衝撃で転倒する。
+            turtle.angry = true;
+            turtle.stateTime = 0.0f;
+        }
+        else
+        {
+            turtle.state = State::Overturned;
+            turtle.stateTime = 6.0f;
+            turtle.angry = false;
+        }
     }
     else
     {
+        // 転倒・復帰中の再打撃では通常状態へ戻す。
         turtle.state = State::Walking;
         turtle.stateTime = 0.0f;
+        turtle.angry = false;
     }
     turtle.animationTime = 0.0f;
     turtle.vx = 0.0f;
@@ -318,6 +368,16 @@ bool EnemyManager::Update(float dt, const StageData& stage, int bumpedSolidId,
 
 int EnemyManager::GetFrame_(const Turtle& turtle) const
 {
+    if (turtle.kind == Kind::Crab)
+    {
+        if (turtle.state == State::Overturned)
+            return 6 + (static_cast<int>(std::fmod(turtle.animationTime, 0.36f) / 0.18f) % 2);
+        if (turtle.state == State::Recovering) return 7;
+        if (turtle.state == State::Defeated) return 8;
+        const float walkTime = turtle.animationTime * (GetWalkSpeed_(turtle) / BASE_WALK_SPEED);
+        const int step = static_cast<int>(std::fmod(walkTime, 0.48f) / 0.12f) % 4;
+        return (turtle.angry ? 3 : 0) + (step == 3 ? 1 : step);
+    }
     if (turtle.state == State::Overturned)
         return 3 + (static_cast<int>(std::fmod(turtle.animationTime, 0.36f) / 0.18f) % 2);
     if (turtle.state == State::Recovering) return 5;
@@ -330,7 +390,6 @@ int EnemyManager::GetFrame_(const Turtle& turtle) const
 
 void EnemyManager::Draw() const
 {
-    if (m_spriteSheet == -1) return;
     // 生成した1774x887画像の7コマ。上段右端の空白は含めない。
     static const SpriteFrame frames[] =
     {
@@ -342,11 +401,27 @@ void EnemyManager::Draw() const
         { 960, 564, 338, 291, 169.0f, 289.0f },
         {1360, 516, 389, 297, 194.5f, 295.0f },
     };
-    const float scale = 0.16f;
+    // enemy_crab.png: 通常歩き3、怒り歩き3、転倒2、撃破1。
+    static const SpriteFrame crabFrames[] =
+    {
+        { 66, 80, 414, 263, 207.0f, 259.0f },
+        { 559, 81, 405, 263, 202.5f, 259.0f },
+        { 1046, 80, 421, 263, 210.5f, 259.0f },
+        { 59, 377, 431, 288, 215.5f, 284.0f },
+        { 554, 377, 432, 291, 216.0f, 287.0f },
+        { 1039, 376, 440, 291, 220.0f, 287.0f },
+        { 51, 728, 452, 217, 226.0f, 213.0f },
+        { 554, 720, 442, 245, 221.0f, 241.0f },
+        { 1064, 706, 438, 271, 219.0f, 267.0f },
+    };
     for (const Turtle& turtle : m_turtles)
     {
         if (!turtle.active || turtle.state == State::Respawning) continue;
-        const SpriteFrame& frame = frames[GetFrame_(turtle)];
+        const bool isCrab = turtle.kind == Kind::Crab;
+        const int graph = isCrab ? m_crabSpriteSheet : m_spriteSheet;
+        if (graph == -1) continue;
+        const float scale = isCrab ? 0.15f : 0.16f;
+        const SpriteFrame& frame = isCrab ? crabFrames[GetFrame_(turtle)] : frames[GetFrame_(turtle)];
         const int centerX = frame.width / 2, centerY = frame.height / 2;
         const float sign = turtle.direction < 0 ? -1.0f : 1.0f;
         const float anchorX = turtle.x + turtle.width * 0.5f;
@@ -355,7 +430,7 @@ void EnemyManager::Draw() const
         {
             DrawRectRotaGraph3(static_cast<int>(std::lround(x + sign * (centerX - frame.pivotX) * scale)),
                 static_cast<int>(std::lround(y)), frame.x, frame.y, frame.width, frame.height,
-                centerX, centerY, scale, scale, 0.0, m_spriteSheet, TRUE,
+                centerX, centerY, scale, scale, 0.0, graph, TRUE,
                 turtle.direction < 0 ? TRUE : FALSE);
         };
         drawAt(anchorX);
