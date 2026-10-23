@@ -77,6 +77,7 @@ void EnemyManager::Reset(const StageData& stage, Lineup lineup)
         m_error = "Stage data is not loaded.";
         return;
     }
+    if (lineup == Lineup::None) return; // ボーナスステージは敵を配置しない。
     // 地形・個体数・出現位置はTMX、種類の構成はステージ設定で選ぶ。
     // FromMapなら、従来のenemyTypeプロパティをそのまま使う。
     const auto getKind = [lineup](const StageEnemySpawn& spawn, int index)

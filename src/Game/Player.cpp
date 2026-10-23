@@ -164,10 +164,6 @@ void Player::Update(float dt, const Input& input)
     m_stageRenderer.Update(dt);
 
     m_lastBumpedObjectId = -1;
-    if (input.Triggered(Action::ToggleDebug))
-    {
-        m_showStageDebug = !m_showStageDebug;
-    }
 
     if (m_jumpPoseTimer > 0.0f)
     {

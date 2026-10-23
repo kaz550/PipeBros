@@ -33,6 +33,11 @@ struct StageEnemyExit
     int direction = -1;
 };
 
+struct StageBonusCoin
+{
+    float x = 0.0f, y = 0.0f; // コインの中心
+};
+
 class StageData
 {
 public:
@@ -43,6 +48,7 @@ public:
     const std::vector<StageSolid>& GetSolids() const { return m_solids; }
     const std::vector<StageEnemySpawn>& GetEnemySpawns() const { return m_enemySpawns; }
     const std::vector<StageEnemyExit>& GetEnemyExits() const { return m_enemyExits; }
+    const std::vector<StageBonusCoin>& GetBonusCoins() const { return m_bonusCoins; }
     float GetPlayerX() const { return m_playerX; }
     float GetPlayerFootY() const { return m_playerFootY; }
     // 再出現ポイントは横方向の中心と足元の座標。
@@ -64,6 +70,7 @@ private:
     std::vector<StageSolid> m_solids;
     std::vector<StageEnemySpawn> m_enemySpawns;
     std::vector<StageEnemyExit> m_enemyExits;
+    std::vector<StageBonusCoin> m_bonusCoins;
     StageSolid m_pow;
     int m_powUses = 0;
     float m_powOriginalHeight = 0.0f;

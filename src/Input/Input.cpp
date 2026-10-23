@@ -59,6 +59,9 @@ int Input::GetActionDown_(Action a, int pad) const
     case Action::ToTitle:
         return IsKeyDown_(KEY_INPUT_T);
 
+    case Action::ToggleStageSelect:
+        return IsKeyDown_(KEY_INPUT_F4);
+
     default:
         return 0;
     }

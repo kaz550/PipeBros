@@ -1,5 +1,7 @@
 ﻿#pragma once
 #include "IScene.h"
+#include <string>
+#include <vector>
 #include "../Game/Player.h"
 #include "../Game/EnemyManager.h"
 
@@ -16,6 +18,13 @@ public:
     void Draw() override;
 
 private:
+    struct BonusCoin { float x, y; bool collected = false; };
+    bool LoadBonusSprite_();
+    void UpdateBonus_(float dt, const Input& input);
+    void DrawBonus_() const;
+    void UpdateStageSelect_(const Input& input);
+    void DrawStageSelect_() const;
+    static const char* GetStageKindName_(int stageNumber);
     int GetTextWidth_(const char* text, int font) const;
     void DrawText_(int x, int y, const char* text, int color, int font) const;
     void DrawCentered_(const char* text, int y, int color, int font) const;
@@ -30,8 +39,22 @@ private:
     static constexpr float STAGE_CLEAR_DURATION = 1.2f;
     // ミスから復活までの秒数。0.0fなら従来の即時復活。
     static constexpr float RESPAWN_DELAY = 1.0f;
+    static constexpr float BONUS_TIME_LIMIT = 20.0f;
+    static constexpr int BONUS_COIN_SCORE = 100;
+    static constexpr int BONUS_PERFECT_SCORE = 1000;
+    static constexpr float BONUS_COIN_SIZE = 24.0f;
+    static constexpr int DEBUG_MAX_STAGE = 99;
     static constexpr int INITIAL_LIVES = 3;
     static constexpr int SCORE_PER_ENEMY = 100;
+    std::vector<BonusCoin> m_bonusCoins;
+    std::string m_bonusError;
+    int m_coinGraph = -1;
+    int m_bonusCollected = 0;
+    float m_bonusAnimationTime = 0.0f;
+    bool m_isBonus = false;
+    bool m_stageSelectOpen = false;
+    bool m_waitStageSelectRelease = true;
+    int m_selectedStage = 1;
     int m_hudFont = -1;
     int m_scoreFont = -1;
     int m_smallFont = -1;

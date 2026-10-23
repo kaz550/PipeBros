@@ -20,6 +20,8 @@ enum class Action
     ToggleDebug, // F3
     ToTitle,     // T
 
+    ToggleStageSelect, // F4（F3のデバッグ表示中）
+
     COUNT
 };
 

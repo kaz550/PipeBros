@@ -20,6 +20,8 @@ public:
     void Respawn();
     // GameSceneでPOWの衝撃を敵へ適用した後に呼ぶ。
     void UsePow();
+    bool IsStageDebugVisible() const { return m_showStageDebug; }
+    void SetStageDebugVisible(bool visible) { m_showStageDebug = visible; }
     void UpdateVisualEffects(float dt);
     Aabb GetAabb() const;
     const StageData& GetStageData() const { return m_stage; }

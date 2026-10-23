@@ -65,6 +65,7 @@ bool StageData::Load(const char* filename)
     m_powUses = 0;
     m_powOriginalHeight = 0.0f;
     m_solids.clear();
+    m_bonusCoins.clear();
     m_enemySpawns.clear();
     m_enemyExits.clear();
     m_error.clear();
@@ -95,20 +96,37 @@ bool StageData::Load(const char* filename)
         if (!groupName) continue;
         const bool collisions = std::strcmp(groupName, "Collisions") == 0;
         const bool spawns = std::strcmp(groupName, "Spawns") == 0;
-        if (!collisions && !spawns) continue;
+        const bool bonusCoins = std::strcmp(groupName, "BonusCoins") == 0;
+        if (!collisions && !spawns && !bonusCoins) continue;
         // この段階では、オブジェクト自身に記録した座標だけを扱う。
         if (group->FloatAttribute("offsetx") != 0.0f
             || group->FloatAttribute("offsety") != 0.0f
             || group->FloatAttribute("x") != 0.0f
             || group->FloatAttribute("y") != 0.0f)
         {
-            m_error = "Collisions and Spawns must have zero layer offsets.";
+            m_error = "Collisions, Spawns and BonusCoins must have zero layer offsets.";
             return false;
         }
         for (const tinyxml2::XMLElement* object = group->FirstChildElement("object");
             object; object = object->NextSiblingElement("object"))
         {
             const char* name = object->Attribute("name");
+            if (bonusCoins)
+            {
+                StageBonusCoin coin;
+                if (!object->FirstChildElement("point") || object->Attribute("gid")
+                    || object->FloatAttribute("rotation") != 0.0f
+                    || object->QueryFloatAttribute("x", &coin.x) != tinyxml2::XML_SUCCESS
+                    || object->QueryFloatAttribute("y", &coin.y) != tinyxml2::XML_SUCCESS
+                    || !std::isfinite(coin.x) || !std::isfinite(coin.y)
+                    || coin.x < 0 || coin.x >= SCREEN_W || coin.y < 0 || coin.y >= SCREEN_H)
+                {
+                    m_error = "BonusCoins must contain unrotated points inside the screen.";
+                    return false;
+                }
+                m_bonusCoins.push_back(coin);
+                continue;
+            }
             if (spawns)
             {
                 const char* objectType = object->Attribute("class");

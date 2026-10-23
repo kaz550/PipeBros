@@ -9,7 +9,7 @@ class StageData;
 class EnemyManager
 {
 public:
-    enum class Lineup { FromMap, TurtlesOnly, CrabsOnly, Mixed };
+    enum class Lineup { FromMap, TurtlesOnly, CrabsOnly, Mixed, None };
     EnemyManager() = default;
     ~EnemyManager();
     EnemyManager(const EnemyManager&) = delete;
