@@ -11,8 +11,7 @@ public:
 	void Update();
 
 	float DeltaTime() const { return m_deltaTime; }
-    // 未使用候補: 累計時間の取得元。現行のプレイ時間はGameSceneが別時計で管理する。
-	float TotalTime() const { return m_totalTime; }
+    
 
 private:
 	int   m_prevMs = 0;

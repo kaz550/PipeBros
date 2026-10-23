@@ -30,14 +30,7 @@ public:
     const std::string& GetError() const { return m_error; }
 
     float GetX() const { return m_x; }
-    // 未使用候補: 次の位置/状態取得の一部は現行srcから呼ばれていない。削除候補一覧を参照。
-    float GetY() const { return m_y; }
     float GetWidth() const { return m_width; }
-    float GetHeight() const { return m_height; }
-    float GetVelocityX() const { return m_vx; }
-    float GetVelocityY() const { return m_vy; }
-    bool IsGrounded() const { return m_isGrounded; }
-    bool IsJumpHolding() const { return m_isJumpHolding; }
     // 今回のUpdateで下から叩いた足場のID。該当なしは-1。
     int GetLastBumpedObjectId() const { return m_lastBumpedObjectId; }
 

@@ -42,9 +42,7 @@ public:
     bool Triggered(Action a) const;
     bool Released(Action a) const;
 
-    // 未使用候補: 現行Player/メニューはActionを直接見るため、この合成軸の呼出はない。
-    float GetMoveX() const { return m_moveX; }
-    float GetMoveY() const { return m_moveY; }
+    
 
 private:
     std::array<int, (int)Action::COUNT> m_prev{};

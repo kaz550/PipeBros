@@ -11,14 +11,3 @@ struct Aabb
     float r = 0.0f;
     float b = 0.0f;
 };
-
-// 旧ObstacleManagerだけが呼ぶ補助関数。辺だけが触れてもtrueで、Collision.h版とは境界条件が異なる。
-inline bool IsHitAabb(const Aabb& a, const Aabb& b)
-{
-    if (a.r < b.l) return false;
-    if (a.l > b.r) return false;
-    if (a.b < b.t) return false;
-    if (a.t > b.b) return false;
-
-    return true;
-}
