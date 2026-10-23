@@ -128,9 +128,19 @@ void Player::UsePow()
 
 void Player::Respawn()
 {
-    // 画像やTMXを再読み込みせず、プレイヤーだけを再出現ポイントへ戻す。
-    m_x = m_respawnX;
-    m_y = m_respawnFootY - m_height;
+    // 画像やTMXを再読み込みせず、現在のPOWの状態に応じて復帰先を選ぶ。
+    if (m_stage.IsLoaded() && m_stage.GetPowUses() > 0)
+    {
+        const StageSolid& pow = m_stage.GetPow();
+        m_x = pow.x + (pow.width - m_width) * 0.5f;
+        m_y = pow.y - m_height;
+    }
+    else
+    {
+        // POWが使用済み・未配置なら、従来の下段中央ポイントを使う。
+        m_x = m_respawnX;
+        m_y = m_respawnFootY - m_height;
+    }
     m_vx = m_vy = 0.0f;
     m_isGrounded = false;
     m_isJumpHolding = false;
