@@ -351,7 +351,7 @@ void EnemyManager::Kick_(Turtle& turtle, int direction)
 }
 
 bool EnemyManager::Update(float dt, const StageData& stage, int bumpedSolidId,
-    float hitX, const Aabb& player, bool canHurtPlayer)
+    float hitX, const Aabb& player, bool canHurtPlayer, bool playerActive)
 {
     if (!stage.IsLoaded() || !std::isfinite(dt) || dt <= 0.0f) return false;
     ResolveEnemyContacts_(dt);
@@ -359,6 +359,7 @@ bool EnemyManager::Update(float dt, const StageData& stage, int bumpedSolidId,
     ApplyBump_(stage, bumpedSolidId, hitX);
     // 着地・復帰・転倒によって、このフレームで近づいた場合も処理する。
     ResolveEnemyContacts_(0.0f);
+    if (!playerActive) return false;
     bool playerHit = false;
     for (Turtle& turtle : m_turtles)
     {

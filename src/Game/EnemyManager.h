@@ -16,8 +16,9 @@ public:
     EnemyManager& operator=(const EnemyManager&) = delete;
     void Reset(const StageData& stage, Lineup lineup = Lineup::FromMap);
     // 通常状態の敵と接触し、プレイヤーにミスが発生した場合はtrue。
+    // playerActive=falseでは敵だけを更新し、プレイヤーへの接触・蹴り判定を省く。
     bool Update(float dt, const StageData& stage, int bumpedSolidId,
-        float hitX, const Aabb& player, bool canHurtPlayer);
+        float hitX, const Aabb& player, bool canHurtPlayer, bool playerActive = true);
     void Draw() const;
     int GetDefeatedCount() const { return m_defeatedCount; }
     int GetTotalCount() const { return static_cast<int>(m_turtles.size()); }

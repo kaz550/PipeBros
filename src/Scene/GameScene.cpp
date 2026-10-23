@@ -5,10 +5,19 @@
 #include "DxLib.h"
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 GameScene::GameScene(SceneManager* mgr)
     : m_mgr(mgr)
 {
+}
+
+GameScene::~GameScene()
+{
+    if (DxLib_IsInit() == 0) return;
+    if (m_hudFont != -1) DeleteFontToHandle(m_hudFont);
+    if (m_scoreFont != -1) DeleteFontToHandle(m_scoreFont);
+    if (m_smallFont != -1) DeleteFontToHandle(m_smallFont);
 }
 
 EnemyManager::Lineup GameScene::GetStageLineup_(int stageNumber)
@@ -34,9 +43,17 @@ float GameScene::GetStageTimeLimit_(int stageNumber)
 
 void GameScene::Enter()
 {
+    // Resultと同じ書体・サイズ・太さ。Rリスタートでは既存ハンドルを再利用する。
+    if (m_hudFont == -1)
+        m_hudFont = CreateFontToHandle("Arial", 26, 7, DX_FONTTYPE_ANTIALIASING_4X4);
+    if (m_scoreFont == -1)
+        m_scoreFont = CreateFontToHandle("Arial", 32, 8, DX_FONTTYPE_ANTIALIASING_4X4);
+    if (m_smallFont == -1)
+        m_smallFont = CreateFontToHandle("Arial", 18, 4, DX_FONTTYPE_ANTIALIASING_4X4);
     m_stageNumber = 1;
     m_player.Reset(PLAYER_START_X, GROUND_Y);
     m_enemyManager.Reset(m_player.GetStageData(), GetStageLineup_(m_stageNumber));
+    m_respawnTimer = 0.0f;
     m_invulnerabilityTimer = m_elapsedTime = m_finishTimer = 0.0f;
     m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_lives = INITIAL_LIVES;
@@ -67,6 +84,7 @@ void GameScene::RestartStage_()
     m_stageTimeLimit = GetStageTimeLimit_(m_stageNumber);
     m_remainingTime = m_stageTimeLimit;
     m_invulnerabilityTimer = 0.0f;
+    m_respawnTimer = 0.0f;
     m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_finishTimer = 0.0f;
     m_isFinished = m_isClear = m_resultRequested = false;
@@ -77,10 +95,19 @@ void GameScene::RestartStage_()
     }
 }
 
+void GameScene::RespawnPlayer_()
+{
+    m_respawnTimer = 0.0f;
+    m_player.Respawn();
+    // 待機時間を含めず、姿を現した時点から無敵2秒を開始する。
+    m_invulnerabilityTimer = 2.0f;
+}
+
 void GameScene::Finish_(bool stageClear)
 {
     if (m_isFinished) return;
     m_isFinished = true;
+    m_respawnTimer = 0.0f;
     m_isClear = stageClear;
     m_finishTimer = 0.0f;
     if (stageClear) return; // クリアは同じGameScene内で次のステージへ進める。
@@ -162,6 +189,16 @@ void GameScene::Update(float dt, const Input& input)
         // 通常ステージは経過時間の記録のみ。タイムアップは発生しない。
         m_elapsedTime += dt;
     }
+    if (m_respawnTimer > 0.0f)
+    {
+        m_player.UpdateVisualEffects(dt);
+        // プレイヤーは不在。敵の移動・周回・復帰・蹴られた後の飛行だけを進める。
+        m_enemyManager.Update(dt, m_player.GetStageData(), -1, 0.0f,
+            m_player.GetAabb(), false, false);
+        m_respawnTimer = m_respawnTimer > dt ? m_respawnTimer - dt : 0.0f;
+        if (m_respawnTimer <= 0.0f) RespawnPlayer_();
+        return;
+    }
     m_invulnerabilityTimer = m_invulnerabilityTimer > dt
         ? m_invulnerabilityTimer - dt : 0.0f;
     m_player.Update(dt, input);
@@ -187,8 +224,9 @@ void GameScene::Update(float dt, const Input& input)
         }
         else
         {
-            m_player.Respawn();
-            m_invulnerabilityTimer = 2.0f;
+            m_invulnerabilityTimer = 0.0f;
+            m_respawnTimer = RESPAWN_DELAY;
+            if (m_respawnTimer <= 0.0f) RespawnPlayer_();
         }
     }
     if (!m_isFinished && m_enemyManager.GetError().empty()
@@ -197,6 +235,24 @@ void GameScene::Update(float dt, const Input& input)
     {
         Finish_(true);
     }
+}
+
+int GameScene::GetTextWidth_(const char* text, int font) const
+{
+    const int length = static_cast<int>(std::strlen(text));
+    return font != -1 ? GetDrawStringWidthToHandle(text, length, font)
+        : GetDrawStringWidth(text, length);
+}
+
+void GameScene::DrawText_(int x, int y, const char* text, int color, int font) const
+{
+    if (font != -1) DrawStringToHandle(x, y, text, color, font);
+    else DrawString(x, y, text, color);
+}
+
+void GameScene::DrawCentered_(const char* text, int y, int color, int font) const
+{
+    DrawText_((SCREEN_W - GetTextWidth_(text, font)) / 2, y, text, color, font);
 }
 
 void GameScene::Draw()
@@ -215,27 +271,32 @@ void GameScene::Draw()
             if (phase % 2 != 0) playerAlpha = 0;
         }
     }
+    if (m_respawnTimer > 0.0f) playerAlpha = 0;
     m_player.Draw(playerAlpha);
     m_enemyManager.Draw();
-    const unsigned int white = GetColor(255, 255, 255);
-    DrawFormatString(24, 16, white, "SCORE: %06d   LIVES: %d", m_score, m_lives);
-    DrawFormatString(SCREEN_W - 180, 16, white, "STAGE %02d", m_stageNumber);
+    const int white = GetColor(235, 237, 225);
+    const int gold = GetColor(255, 201, 96);
+    char text[160];
+    DrawText_(24, 12, "PLAYER 1", gold, m_hudFont);
+    std::snprintf(text, sizeof(text), "%06d", m_score);
+    DrawText_(24, 44, text, white, m_scoreFont);
+    std::snprintf(text, sizeof(text), "LIVES %d", m_lives);
+    DrawText_(24, 82, text, white, m_smallFont);
+    std::snprintf(text, sizeof(text), "STAGE %02d", m_stageNumber);
+    DrawText_(SCREEN_W - 24 - GetTextWidth_(text, m_hudFont), 16, text, gold, m_hudFont);
     if (m_stageTimeLimit > 0.0f)
     {
         const int seconds = static_cast<int>(std::ceil(m_remainingTime));
-        char timeText[32];
-        const int textLength = std::snprintf(timeText, sizeof(timeText), "TIME %03d", seconds);
-        const int textWidth = GetDrawStringWidth(timeText, textLength);
-        const unsigned int timeColor = m_remainingTime <= 10.0f
-            ? GetColor(255, 80, 80) : white;
-        DrawString((SCREEN_W - textWidth) / 2, 16, timeText, timeColor);
+        std::snprintf(text, sizeof(text), "TIME %03d", seconds);
+        DrawCentered_(text, 16, m_remainingTime <= 10.0f ? GetColor(255, 80, 80) : white, m_hudFont);
     }
-    DrawFormatString(24, 44, white, "DEFEATED: %d / %d   INVUL: %.1f",
-        m_enemyManager.GetDefeatedCount(), m_enemyManager.GetTotalCount(),
-        m_invulnerabilityTimer);
-    DrawString(24, 72, "ARROWS: MOVE / SHIFT: RUN / SPACE: JUMP / F3: DEBUG / R: RESTART", white);
+    // 大きくしたスコアと重ならないよう、補助情報は床より下へまとめる。
+    DrawText_(24, 646, "ARROWS / A,D: MOVE   SHIFT: RUN   SPACE: JUMP   F3: DEBUG   R: RESTART", white, m_smallFont);
+    std::snprintf(text, sizeof(text), "DEFEATED: %d / %d   INVUL: %.1f",
+        m_enemyManager.GetDefeatedCount(), m_enemyManager.GetTotalCount(), m_invulnerabilityTimer);
+    DrawText_(24, 670, text, white, m_smallFont);
     if (!m_enemyManager.GetError().empty())
-        DrawFormatString(24, 108, GetColor(255, 150, 120), "%s", m_enemyManager.GetError().c_str());
+        DrawText_(24, 622, m_enemyManager.GetError().c_str(), GetColor(255, 150, 120), m_smallFont);
     if (m_stageIntroTimer > 0.0f || m_isFinished)
     {
         char title[64];
@@ -243,17 +304,10 @@ void GameScene::Draw()
             std::snprintf(title, sizeof(title), "STAGE %02d", m_stageNumber);
         else
             std::snprintf(title, sizeof(title), "%s", m_isClear ? "STAGE CLEAR!" : "GAME OVER");
-        int length = 0;
-        while (title[length] != '\0') ++length;
-        const int x = (SCREEN_W - GetDrawStringWidth(title, length)) / 2;
-        DrawString(x + 2, 220, title, GetColor(0, 0, 0));
-        DrawString(x, 218, title, GetColor(255, 230, 120));
+        const int x = (SCREEN_W - GetTextWidth_(title, m_scoreFont)) / 2;
+        DrawText_(x + 2, 220, title, GetColor(0, 0, 0), m_scoreFont);
+        DrawText_(x, 218, title, gold, m_scoreFont);
         if (m_isFinished)
-        {
-            const char* message = m_isClear ? "NEXT STAGE..." : "MOVING TO RESULT...";
-            length = 0;
-            while (message[length] != '\0') ++length;
-            DrawString((SCREEN_W - GetDrawStringWidth(message, length)) / 2, 250, message, white);
-        }
+            DrawCentered_(m_isClear ? "NEXT STAGE..." : "MOVING TO RESULT...", 260, white, m_smallFont);
     }
 }
