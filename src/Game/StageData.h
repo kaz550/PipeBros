@@ -12,6 +12,10 @@ struct StageSolid
     bool bumpable = false;
 };
 
+// 表示と当たり判定で同じPOW矩形を使用する。未配置ならidは-1。
+namespace tinyxml2 { class XMLElement; }
+bool ReadStagePow(const tinyxml2::XMLElement* map, StageSolid& pow, std::string& error);
+
 struct StageEnemySpawn
 {
     std::string name;
@@ -42,6 +46,7 @@ public:
     // 再出現ポイントは横方向の中心と足元の座標。
     float GetPlayerRespawnCenterX() const { return m_playerRespawnCenterX; }
     float GetPlayerRespawnFootY() const { return m_playerRespawnFootY; }
+    const StageSolid& GetPow() const { return m_pow; }
     float GetGroundY() const { return m_groundY; }
 
     // dt内の移動を上面・下面・側面との交差で判定する。
@@ -54,6 +59,7 @@ private:
     std::vector<StageSolid> m_solids;
     std::vector<StageEnemySpawn> m_enemySpawns;
     std::vector<StageEnemyExit> m_enemyExits;
+    StageSolid m_pow;
     std::string m_error;
     float m_playerX = 220.0f;
     float m_playerFootY = 620.0f;
@@ -62,5 +68,3 @@ private:
     float m_playerRespawnFootY = 620.0f;
     bool m_loaded = false;
 };
-
-

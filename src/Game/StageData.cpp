@@ -4,9 +4,63 @@
 #include <cmath>
 #include <cstring>
 
+bool ReadStagePow(const tinyxml2::XMLElement* map, StageSolid& pow, std::string& error)
+{
+    pow = StageSolid{};
+    for (const tinyxml2::XMLElement* group = map->FirstChildElement("objectgroup");
+        group; group = group->NextSiblingElement("objectgroup"))
+    {
+        const char* name = group->Attribute("name");
+        if (!name || std::strcmp(name, "Objects") != 0
+            || !group->BoolAttribute("visible", true)) continue;
+        for (const tinyxml2::XMLElement* object = group->FirstChildElement("object");
+            object; object = object->NextSiblingElement("object"))
+        {
+            const char* type = object->Attribute("class");
+            if (!type || !type[0]) type = object->Attribute("type");
+            if (!type || std::strcmp(type, "POW") != 0
+                || !object->BoolAttribute("visible", true)) continue;
+            if (pow.id != -1)
+            {
+                error = "Only one visible POW is supported.";
+                return false;
+            }
+            StageSolid candidate;
+            candidate.id = object->IntAttribute("id", -1);
+            if (candidate.id <= 0
+                || object->QueryFloatAttribute("x", &candidate.x) != tinyxml2::XML_SUCCESS
+                || object->QueryFloatAttribute("y", &candidate.y) != tinyxml2::XML_SUCCESS
+                || object->QueryFloatAttribute("width", &candidate.width) != tinyxml2::XML_SUCCESS
+                || object->QueryFloatAttribute("height", &candidate.height) != tinyxml2::XML_SUCCESS
+                || !std::isfinite(candidate.x) || !std::isfinite(candidate.y)
+                || !std::isfinite(candidate.width) || !std::isfinite(candidate.height)
+                || candidate.width <= 0.0f || candidate.height <= 0.0f
+                || object->FloatAttribute("rotation") != 0.0f || object->Attribute("template")
+                || object->Attribute("gid") || object->FirstChildElement("ellipse")
+                || object->FirstChildElement("polygon") || object->FirstChildElement("polyline")
+                || object->FirstChildElement("point")
+                || group->FloatAttribute("offsetx") != 0.0f
+                || group->FloatAttribute("offsety") != 0.0f
+                || group->FloatAttribute("x") != 0.0f || group->FloatAttribute("y") != 0.0f
+                || group->FloatAttribute("opacity", 1.0f) != 1.0f || group->Attribute("tintcolor")
+                || group->FloatAttribute("parallaxx", 1.0f) != 1.0f
+                || group->FloatAttribute("parallaxy", 1.0f) != 1.0f)
+            {
+                error = "POW must be an unrotated rectangle with positive size in an unmodified Objects layer.";
+                return false;
+            }
+            // 今回は足場のみ。通常の床叩きによる敵への効果には含めない。
+            candidate.bumpable = false;
+            pow = candidate;
+        }
+    }
+    return true;
+}
+
 bool StageData::Load(const char* filename)
 {
     m_loaded = false;
+    m_pow = StageSolid{};
     m_solids.clear();
     m_enemySpawns.clear();
     m_enemyExits.clear();
@@ -176,6 +230,19 @@ bool StageData::Load(const char* filename)
         m_playerRespawnCenterX = SCREEN_W * 0.5f;
         m_playerRespawnFootY = m_groundY;
     }
+    if (!ReadStagePow(map, m_pow, m_error)) return false;
+    if (m_pow.id != -1)
+    {
+        for (const StageSolid& solid : m_solids)
+        {
+            if (solid.id == m_pow.id)
+            {
+                m_error = "POW and collision objects must have unique IDs.";
+                return false;
+            }
+        }
+        m_solids.push_back(m_pow);
+    }
     m_loaded = true;
     return true;
 }
@@ -262,5 +329,3 @@ void StageData::Move(float& x, float& y, float& vx, float& vy,
         }
     }
 }
-
-

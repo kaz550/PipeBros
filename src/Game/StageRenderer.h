@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-struct StageSolid;
+#include "StageData.h"
 
 // 有限・直交TMX、非圧縮CSVタイルレイヤー、画像アトラスTSXの描画。
 // 当たり判定は、これまでのStageDataが担当する。
@@ -70,9 +70,10 @@ private:
     std::vector<Tileset> m_tilesets;
     std::vector<Tile> m_tiles;
     std::vector<BumpEffect> m_bumps;
+    StageSolid m_pow;
+    int m_powGraph = -1;
     std::string m_error;
     int m_tileWidth = 0;
     int m_tileHeight = 0;
     float m_mapPixelWidth = 0.0f;
 };
-

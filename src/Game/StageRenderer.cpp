@@ -20,11 +20,14 @@ void StageRenderer::Release_()
 {
     if (DxLib_IsInit() != 0)
     {
+        if (m_powGraph != -1) DeleteGraph(m_powGraph);
         for (const Tileset& tileset : m_tilesets)
         {
             if (tileset.graph != -1) DeleteGraph(tileset.graph);
         }
     }
+    m_powGraph = -1;
+    m_pow = StageSolid{};
     m_tilesets.clear();
     m_tiles.clear();
     m_bumps.clear();
@@ -222,6 +225,16 @@ bool StageRenderer::Load(const char* filename)
             if (!AddTile_(rawGid, x, bottom - height, width, height, false)) return false;
         }
     }
+    if (!ReadStagePow(map, m_pow, m_error)) return Fail_(m_error);
+    if (m_pow.id != -1)
+    {
+        const std::string imagePath = (mapPath.parent_path() / "../images/pow.png").lexically_normal().string();
+        m_powGraph = LoadGraph(imagePath.c_str());
+        if (m_powGraph == -1) return Fail_("Could not load POW image: " + imagePath);
+        int width = 0, height = 0;
+        if (GetGraphSize(m_powGraph, &width, &height) == -1 || width != 1774 || height != 887)
+            return Fail_("pow.png must be the supplied 1774 x 887 image.");
+    }
     return true;
 }
 
@@ -340,5 +353,22 @@ void StageRenderer::Draw() const
             static_cast<double>(tile.height) / set.tileHeight,
             angle, set.graph, TRUE, flipX ? TRUE : FALSE, flipY ? TRUE : FALSE);
     }
+    if (m_powGraph != -1)
+    {
+        // 配布画像の透明な余白を除いた矩形を、TMXの矩形へ合わせる。
+        constexpr int sourceX = 12, sourceY = 65, sourceWidth = 1751, sourceHeight = 756;
+        for (int copy = -1; copy <= 1; ++copy)
+        {
+            const float x = m_pow.x + copy * m_mapPixelWidth;
+            if (x + m_pow.width <= 0.0f || x >= m_mapPixelWidth) continue;
+            DrawRectRotaGraph3(
+                static_cast<int>(std::lround(x + m_pow.width * 0.5f)),
+                static_cast<int>(std::lround(m_pow.y + m_pow.height * 0.5f)),
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                sourceWidth / 2, sourceHeight / 2,
+                static_cast<double>(m_pow.width) / sourceWidth,
+                static_cast<double>(m_pow.height) / sourceHeight,
+                0.0, m_powGraph, TRUE, FALSE, FALSE);
+        }
+    }
 }
-

@@ -125,7 +125,7 @@
     </object>
   </objectgroup>
   <objectgroup id="6" name="Objects" color="#ffffaa33">
-    <object id="10" name="POW" type="POW" x="608" y="588" width="64" height="32" />
+    <object id="10" name="POW" type="POW" x="608" y="492" width="64" height="32" />
   </objectgroup>
   <objectgroup id="7" name="PipesVisual" draworder="index">
     <object id="13" name="UpperPipe" gid="5" x="0" y="148" width="32" height="64" />
