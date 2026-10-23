@@ -1,4 +1,8 @@
-﻿#include "App.h"
+﻿// 土管兄弟 ソース解説
+// アプリ全体の初期化、毎フレームの入力・時間・シーン更新、終了処理を担当する。
+// 入力の取得は1フレームに1回。個別のゲームルールはGameSceneへ委ねる。
+
+#include "App.h"
 #include "Config.h"
 #include "../Input/Input.h"
 #include "../Audio/Audio.h"
@@ -9,6 +13,7 @@
 #include <memory>
 #include <cstdio>
 
+// ウィンドウ・画面サイズ・裏画面描画を設定する。DxLibの初期化失敗ならゲームループへ進まない。
 bool App::InitDxLib_()
 {
 	ChangeWindowMode(TRUE);
@@ -22,11 +27,13 @@ bool App::InitDxLib_()
 	return true;
 }
 
+// 最後にDxLibを終了する。音声などの明示的な後片付けはこの前に済ませる。
 void App::ShutdownDxLib_()
 {
 	DxLib_End();
 }
 
+// フレーム処理が短いときだけ待つ簡易リミッター。整数msで割るため厳密な60FPS同期ではない。
 void App::LimitFps_()
 {
 	const int frameMs = 1000 / TARGET_FPS;
@@ -39,6 +46,7 @@ void App::LimitFps_()
 	prev = GetNowCount();
 }
 
+// 入力取得→dt更新→シーン更新→描画→画面反転の順を維持し、終了時に資源を後片付けする。
 int App::Run()
 {
 	if (!InitDxLib_()) return -1;
@@ -54,6 +62,7 @@ int App::Run()
 
 	Audio::Instance().LoadSe("assets/se_decide.wav", "decide");
 	Audio::Instance().LoadSe("assets/se_back.wav", "back");
+	// 未使用候補: hitは登録されるが、現行srcにPlaySe("hit")の呼出はない。
 	Audio::Instance().LoadSe("assets/se_hit.wav", "hit");
 
 	Audio::Instance().LoadBgm("assets/bgm.wav");
@@ -78,6 +87,7 @@ int App::Run()
 
 	while (ProcessMessage() == 0)
 	{
+		// 取得はここだけ。以降のシーン・個体は同じフレームのスナップショットを参照する。
 		input.Update();
 		if (input.Triggered(Action::Quit)) break;
 
@@ -91,14 +101,15 @@ int App::Run()
 			const float fps = m_fps.GetFps();
 			m_scene.Context().fps = fps;
 
-			// 手動でLOWにされた場合も「継続判定」は働くが、
-			// ForceLowは“きっかけ”として残す運用（HIGH復帰は自動でOK）
+			// 注意: Forceは連続回数も0に戻す。この呼び方では毎サンプル履歴を消すため、
+			// High復帰に必要な2回連続のカウントが蓄積しない。動作の修正は別途行う。
 			m_quality.Force(m_scene.Context().quality);
 			m_quality.UpdateOnFpsSample(fps);
 			m_scene.Context().quality = m_quality.Level();
 		}
 
 		// Scene update/draw
+		// Update内で要求されたシーン切替を適用してから、その新しいシーンを描画する。
 		m_scene.Update(dt, input);
 		if (m_scene.Context().quitRequested) break;
 

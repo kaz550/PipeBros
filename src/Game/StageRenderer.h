@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// TMX/TSXのCSVタイルと画像を読み、固定画面の地形・土管・POWを描く。
+// 床叩きの持ち上げは描画上の演出だけ。StageDataの判定矩形は動かさない。
+
+#pragma once
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -22,6 +26,7 @@ public:
     const std::string& GetError() const { return m_error; }
 
 private:
+    // TSXの画像ハンドルと切り出し規則。TMXのGIDはfirstGidでローカル番号へ直す。
     struct Tileset
     {
         std::uint32_t firstGid = 0;
@@ -49,6 +54,7 @@ private:
         bool diagonal = false;
         bool isPlatform = false;
     };
+    // 床叩きの見た目だけの状態。秒とpxで、寿命・頂点時間・高さ・半径を調整する。
     struct BumpEffect
     {
         int solidId = -1;

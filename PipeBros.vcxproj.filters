@@ -51,12 +51,6 @@
     <ClCompile Include="src\Input\Input.cpp">
       <Filter>Input</Filter>
     </ClCompile>
-    <ClCompile Include="src\Render\Camera2D.cpp">
-      <Filter>Render</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Render\RenderUtil.cpp">
-      <Filter>Render</Filter>
-    </ClCompile>
     <ClCompile Include="src\Scene\GameScene.cpp">
       <Filter>Scene</Filter>
     </ClCompile>
@@ -68,15 +62,6 @@
     </ClCompile>
     <ClCompile Include="src\Scene\TitleScene.cpp">
       <Filter>Scene</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Game\Obstacle.cpp">
-      <Filter>Game</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Game\ObstacleManager.cpp">
-      <Filter>Game</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Game\Background.cpp">
-      <Filter>Game</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ThirdParty\tinyxml2\tinyxml2.cpp">
@@ -114,29 +99,14 @@
     <ClInclude Include="src\Game\Aabb.h">
       <Filter>Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Game\Collision.h">
-      <Filter>Game</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Game\GridPos.h">
-      <Filter>Game</Filter>
-    </ClInclude>
     <ClInclude Include="src\Game\Player.h">
       <Filter>Game</Filter>
     </ClInclude>
     <ClInclude Include="src\Game\Score.h">
       <Filter>Game</Filter>
     </ClInclude>
-    <ClInclude Include="src\Game\Vec2.h">
-      <Filter>Game</Filter>
-    </ClInclude>
     <ClInclude Include="src\Input\Input.h">
       <Filter>Input</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Render\Camera2D.h">
-      <Filter>Render</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Render\RenderUtil.h">
-      <Filter>Render</Filter>
     </ClInclude>
     <ClInclude Include="src\Scene\GameScene.h">
       <Filter>Scene</Filter>
@@ -158,15 +128,6 @@
     </ClInclude>
     <ClInclude Include="src\Scene\TitleScene.h">
       <Filter>Scene</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Game\Obstacle.h">
-      <Filter>Game</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Game\ObstacleManager.h">
-      <Filter>Game</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Game\Background.h">
-      <Filter>Game</Filter>
     </ClInclude>
     <ClInclude Include="src\ThirdParty\tinyxml2\tinyxml2.h">
       <Filter>ThirdParty\tinyxml2</Filter>

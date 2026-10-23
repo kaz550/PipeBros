@@ -1,4 +1,8 @@
-﻿#include "EnemyManager.h"
+﻿// 土管兄弟 ソース解説
+// カメ・カニの状態、移動、周回加速、打撃と2人分の接触をまとめて扱う。
+// GameSceneが1フレームに1回だけ更新し、ContactResultで各プレイヤーへの結果を受け取る。
+
+#include "EnemyManager.h"
 #include "StageData.h"
 #include "../Core/Config.h"
 #include "DxLib.h"
@@ -12,6 +16,7 @@ EnemyManager::~EnemyManager()
         DeleteGraph(m_crabSpriteSheet);
 }
 
+// 周回レベルによる速度倍率へ、怒ったカニだけの1.5倍を掛ける。
 float EnemyManager::GetWalkSpeed_(const Turtle& turtle)
 {
     int level = turtle.completedLoops / LOOPS_PER_SPEEDUP;
@@ -20,6 +25,7 @@ float EnemyManager::GetWalkSpeed_(const Turtle& turtle)
     return BASE_WALK_SPEED * (1.0f + SPEED_GAIN_PER_LEVEL * level) * angerRate;
 }
 
+// カメ画像を1回だけ読み、想定サイズを検証する。asset/images優先の互換経路も残す。
 bool EnemyManager::LoadSprite_()
 {
     if (m_spriteSheet != -1) return true;
@@ -45,6 +51,7 @@ bool EnemyManager::LoadSprite_()
     return true;
 }
 
+// カニ用の9コマシートを読み、サイズ違いをエラーにする。
 bool EnemyManager::LoadCrabSprite_()
 {
     if (m_crabSpriteSheet != -1) return true;
@@ -67,6 +74,7 @@ bool EnemyManager::LoadCrabSprite_()
     return true;
 }
 
+// TMXの出現ポイント数と面の種類から個体を作る。Noneならボーナスなので敵を作らない。
 void EnemyManager::Reset(const StageData& stage, Lineup lineup)
 {
     m_turtles.clear();
@@ -108,6 +116,7 @@ void EnemyManager::Reset(const StageData& stage, Lineup lineup)
     if (m_turtles.empty()) m_error = "No EnemySpawn points in the Spawns layer.";
 }
 
+// 同じ個体の種類・怒り・周回数を残し、選んだ上段出現口へ位置を戻す。
 void EnemyManager::RespawnTurtle_(Turtle& turtle, const StageData& stage, int spawnIndex)
 {
     const auto& spawns = stage.GetEnemySpawns();
@@ -128,6 +137,7 @@ void EnemyManager::RespawnTurtle_(Turtle& turtle, const StageData& stage, int sp
     turtle.direction = spawn.direction;
 }
 
+// 下段の出口を進行方向へ通過する歩行個体を再出現待ちへ移す。撃破や総数は増やさない。
 bool EnemyManager::TryExit_(Turtle& turtle, const StageData& stage, float dt)
 {
     if (turtle.state != State::Walking || !turtle.grounded) return false;
@@ -160,6 +170,7 @@ bool EnemyManager::TryExit_(Turtle& turtle, const StageData& stage, float dt)
     return false;
 }
 
+// 個体の待機・復帰・飛行・歩行を状態に応じて進める。Defeatedだけは地形と衝突せず画面外へ飛ぶ。
 void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stage)
 {
     if (!turtle.active) return;
@@ -218,6 +229,7 @@ void EnemyManager::UpdateTurtle_(Turtle& turtle, float dt, const StageData& stag
         turtle.direction = -turtle.direction;
 }
 
+// 接近中の組合せだけを反転する。移動前にはdt先を予測し、移動後にはdt=0で重なりを補う。
 void EnemyManager::ResolveEnemyContacts_(float dt)
 {
     // 本体の間に8pxの余白を取り、次の移動で接触する場合も先に反転する。
@@ -260,6 +272,7 @@ void EnemyManager::ResolveEnemyContacts_(float dt)
     }
 }
 
+// 接地中の敵に1回の衝撃を与える。カニの初撃は怒り、転倒・復帰中の再打撃は通常へ戻す。
 void EnemyManager::ApplyHit_(Turtle& turtle)
 {
     if (!turtle.active || !turtle.grounded
@@ -292,6 +305,7 @@ void EnemyManager::ApplyHit_(Turtle& turtle)
     turtle.grounded = false;
 }
 
+// POWなら全接地個体へ、通常床なら同じ足場の打撃周辺だけへ衝撃を送る。
 void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
 {
     if (solidId == -1) return;
@@ -326,6 +340,7 @@ void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
     }
 }
 
+// 画面端の反対側にある複製位置も含め、敵と個人の矩形を調べる。
 bool EnemyManager::TouchesPlayer_(const Turtle& turtle, const Aabb& player) const
 {
     // 画面端にまたがっている場合も反対側のプレイヤーと接触できる。
@@ -340,6 +355,7 @@ bool EnemyManager::TouchesPlayer_(const Turtle& turtle, const Aabb& player) cons
     return false;
 }
 
+// 撃破状態へ一度だけ移し、飛行の初速を与えて共有撃破数を増やす。加点の担当者はUpdateが返す。
 void EnemyManager::Kick_(Turtle& turtle, int direction)
 {
     turtle.state = State::Defeated;
@@ -351,6 +367,7 @@ void EnemyManager::Kick_(Turtle& turtle, int direction)
     ++m_defeatedCount;
 }
 
+// 敵の時間を1回進め、全員の床叩きを適用してから接触する。POWは最後の衝撃後に消費し、1体の蹴り先は1人だけにする。
 void EnemyManager::Update(float dt, StageData& stage, const PlayerContact* players,
     ContactResult* results, int playerCount)
 {
@@ -395,6 +412,7 @@ void EnemyManager::Update(float dt, StageData& stage, const PlayerContact* playe
     }
 }
 
+// 状態・種類・怒り・歩行速度から表示コマを選ぶ。判定や得点は変更しない。
 int EnemyManager::GetFrame_(const Turtle& turtle) const
 {
     if (turtle.kind == Kind::Crab)
@@ -417,6 +435,7 @@ int EnemyManager::GetFrame_(const Turtle& turtle) const
     return step == 3 ? 1 : step;
 }
 
+// 各種類の切り出し矩形を足元へ揃える。待機個体は隠し、通常個体は左右端にも複製する。
 void EnemyManager::Draw() const
 {
     // 生成した1774x887画像の7コマ。上段右端の空白は含めない。

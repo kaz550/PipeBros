@@ -1,4 +1,8 @@
-﻿#include "GameScene.h"
+﻿// 土管兄弟 ソース解説
+// 共通ステージと2人分の状態を所有し、得点・残機・面進行・ボーナスを統括する。
+// Playerは各個体、EnemyManagerは敵全体を更新する。待ち時間と接触の順序もこのシーンで制御する。
+
+#include "GameScene.h"
 #include "SceneManager.h"
 #include "../Input/Input.h"
 #include "../Core/Config.h"
@@ -22,6 +26,7 @@ GameScene::~GameScene()
     if (m_smallFont != -1) DeleteFontToHandle(m_smallFont);
 }
 
+// 4面周期でカメ→カニ→混合→ボーナスを選ぶ。地形ファイルの切替とは独立した設定。
 EnemyManager::Lineup GameScene::GetStageLineup_(int stageNumber)
 {
     if (stageNumber < 1) return EnemyManager::Lineup::TurtlesOnly;
@@ -35,6 +40,7 @@ EnemyManager::Lineup GameScene::GetStageLineup_(int stageNumber)
     }
 }
 
+// デバッグの面選択に表示する文字列を返す。
 const char* GameScene::GetStageKindName_(int stageNumber)
 {
     switch (GetStageLineup_(stageNumber))
@@ -46,11 +52,13 @@ const char* GameScene::GetStageKindName_(int stageNumber)
     }
 }
 
+// 通常面は0で時間制限なし、ボーナスだけ20秒。時間制限機能自体を消さない。
 float GameScene::GetStageTimeLimit_(int stageNumber)
 {
     return GetStageLineup_(stageNumber) == EnemyManager::Lineup::None ? BONUS_TIME_LIMIT : 0.0f;
 }
 
+// 新しいゲームとして、人数を読み、全員の得点・残機・累計時間を初期化する。Rとリトライもこの経路を使う。
 void GameScene::Enter()
 {
     if (m_hudFont == -1)
@@ -89,6 +97,7 @@ void GameScene::Enter()
     }
 }
 
+// 残機がある参加者が1人でもいれば続行する。2人全員のOUTだけがゲームオーバーになる。
 bool GameScene::HasLivingPlayer_() const
 {
     for (int i = 0; i < m_playerCount; ++i)
@@ -96,12 +105,14 @@ bool GameScene::HasLivingPlayer_() const
     return false;
 }
 
+// 指定した本人へ加点し、6桁の表示上限へ収める。共有撃破数から両者へ二重加点しない。
 void GameScene::AddScore_(int playerIndex, int points)
 {
     PlayerState& state = m_playerStates[playerIndex];
     state.score = (std::min)(999999, state.score + points);
 }
 
+// 各自の得点・残機と累計時間を保ち、敵・地形・POW・コイン・面内タイマーだけを作り直す。
 void GameScene::RestartStage_()
 {
     m_stageError.clear();
@@ -145,6 +156,7 @@ void GameScene::RestartStage_()
     }
 }
 
+// 本人だけ復帰し、姿を現す時点から無敵2秒を開始する。もう一方と敵の状態は維持する。
 void GameScene::RespawnPlayer_(int playerIndex)
 {
     PlayerState& state = m_playerStates[playerIndex];
@@ -153,6 +165,7 @@ void GameScene::RespawnPlayer_(int playerIndex)
     state.invulnerability = 2.0f;
 }
 
+// 終了表示へ一度だけ入る。通常クリアは同シーンで次面、ゲームオーバーだけContextへ結果を渡す。
 void GameScene::Finish_(bool stageClear)
 {
     if (m_isFinished) return;
@@ -183,6 +196,7 @@ void GameScene::Finish_(bool stageClear)
     }
 }
 
+// 優先順は全体再開始→デバッグ選択→開始/終了待ち→時間→個体移動→2人接触→敵→加点/進行。早期return中にゲームが進まないよう分岐する。
 void GameScene::Update(float dt, const Input& input)
 {
     if (!std::isfinite(dt) || dt <= 0.0f) return;
@@ -226,6 +240,7 @@ void GameScene::Update(float dt, const Input& input)
         }
         return;
     }
+    // 通常面の制限は0なので入らない。ボーナスの20秒と累計プレイ時間をここで進める。
     if (m_stageTimeLimit > 0.0f)
     {
         m_elapsedTime += (std::min)(dt, m_remainingTime);
@@ -244,6 +259,7 @@ void GameScene::Update(float dt, const Input& input)
     else m_elapsedTime += dt;
     if (m_isBonus) { UpdateBonus_(dt, input); return; }
 
+    // 全員の移動前の本体を保存し、両者の移動が終わってから相互接触を解決する。
     Aabb contactBefore[2]{};
     EnemyManager::PlayerContact contacts[2];
     EnemyManager::ContactResult results[2];
@@ -266,6 +282,7 @@ void GameScene::Update(float dt, const Input& input)
         contacts[i].bumpedSolidId = m_players[i].GetLastBumpedObjectId();
         contacts[i].hitX = m_players[i].GetX() + m_players[i].GetWidth() * 0.5f;
         contacts[i].active = true;
+        // 無敵中もactiveなので転倒した敵を蹴れる。canHurtだけをfalseにする。
         contacts[i].canHurt = state.invulnerability <= 0.0f;
         for (const StageSolid& solid : m_stage.GetSolids())
             if (solid.id == contacts[i].bumpedSolidId) { m_stageRenderer.Bump(solid, contacts[i].hitX); break; }
@@ -295,6 +312,7 @@ void GameScene::Update(float dt, const Input& input)
         && m_enemyManager.GetDefeatedCount() >= m_enemyManager.GetTotalCount()) Finish_(true);
 }
 
+// カスタムフォントまたは既定フォントで文字幅を求め、HUDや中央配置へ使う。
 int GameScene::GetTextWidth_(const char* text, int font) const
 {
     const int length = static_cast<int>(std::strlen(text));
@@ -302,17 +320,20 @@ int GameScene::GetTextWidth_(const char* text, int font) const
         : GetDrawStringWidth(text, length);
 }
 
+// フォント作成の失敗時も既定の描画で文字を残す。
 void GameScene::DrawText_(int x, int y, const char* text, int color, int font) const
 {
     if (font != -1) DrawStringToHandle(x, y, text, color, font);
     else DrawString(x, y, text, color);
 }
 
+// 共通の文字幅計算を使い、画面中央へ短いメッセージを置く。
 void GameScene::DrawCentered_(const char* text, int y, int color, int font) const
 {
     DrawText_((SCREEN_W - GetTextWidth_(text, font)) / 2, y, text, color, font);
 }
 
+// 判定矩形とIDを表示する。これは見た目の確認用で、判定データ自体は変更しない。
 void GameScene::DrawStageDebug_() const
 {
     if (!m_showStageDebug || !m_stage.IsLoaded()) return;
@@ -330,6 +351,7 @@ void GameScene::DrawStageDebug_() const
     DrawString(20, 150, "F3: COLLISION DEBUG", GetColor(80, 220, 160));
 }
 
+// 共通地形を1回描き、各自の透明度で2人を描く。敵・コイン・個別HUD・面表示・デバッグの順に重ねる。
 void GameScene::Draw()
 {
     m_stageRenderer.Draw();
@@ -410,6 +432,7 @@ void GameScene::Draw()
     if (m_stageSelectOpen) DrawStageSelect_();
 }
 
+// コイン画像を再利用し、1254×1254pxの4コマ配置を検証する。
 bool GameScene::LoadBonusSprite_()
 {
     if (m_coinGraph != -1) return true;
@@ -430,8 +453,10 @@ bool GameScene::LoadBonusSprite_()
     return true;
 }
 
+// 両者の移動と接触を解決後、移動区間でコインを回収する。1枚は1人だけ、全回収ボーナスは残機のある全員へ一度だけ加点する。
 void GameScene::UpdateBonus_(float dt, const Input& input)
 {
+    // コイン用の細い矩形と、押し合い用の本体矩形を別に保存する。
     Aabb before[2]{}, after[2]{}, contactBefore[2]{};
     for (int i = 0; i < m_playerCount; ++i)
     {
@@ -506,6 +531,7 @@ void GameScene::UpdateBonus_(float dt, const Input& input)
     }
 }
 
+// 時間から回転コマを選び、未回収のコインだけを描く。回収判定の大きさは一定。
 void GameScene::DrawBonus_() const
 {
     if (m_coinGraph == -1) return;
@@ -531,6 +557,7 @@ void GameScene::DrawBonus_() const
     }
 }
 
+// 面番号を循環選択する。確定時は各自の得点と残機を維持し、全員OUTの場合のみ全員を復帰させる。
 void GameScene::UpdateStageSelect_(const Input& input)
 {
     if (!input.Pressed(Action::Decide)) m_waitStageSelectRelease = false;
@@ -554,6 +581,7 @@ void GameScene::UpdateStageSelect_(const Input& input)
     }
 }
 
+// 停止中のゲームへ暗幕と選択パネルを重ねる。待ち時間や入力状態は描画内で進めない。
 void GameScene::DrawStageSelect_() const
 {
     int mode = DX_BLENDMODE_NOBLEND, param = 0;

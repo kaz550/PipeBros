@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// 1人分の移動・可変ジャンプ・復帰・スプライトと、2人間の接触解決を担当する。
+// ステージは所有せずGameSceneの共通StageDataを参照する。x/yは本体左上、Yの正方向は下。
+
+#pragma once
 #include "Aabb.h"
 #include "StageData.h"
 
@@ -26,6 +30,7 @@ public:
     const std::string& GetError() const { return m_error; }
 
     float GetX() const { return m_x; }
+    // 未使用候補: 次の位置/状態取得の一部は現行srcから呼ばれていない。削除候補一覧を参照。
     float GetY() const { return m_y; }
     float GetWidth() const { return m_width; }
     float GetHeight() const { return m_height; }
@@ -47,6 +52,7 @@ private:
     // 接触補正にもステージ判定を使い、壁・POWへ押し込まない。
     float MoveByContact_(float dx, float dy);
     void LaunchByPlayer_(int direction);
+    // 2人間の突き上げ調整値。横px/秒、縦px/秒（上は負）、入力制限の秒数。
     static constexpr float CONTACT_PUSH_SPEED = 280.0f;
     static constexpr float CONTACT_LAUNCH_SPEED = -460.0f;
     static constexpr float CONTACT_LOCK_DURATION = 0.20f;
@@ -63,8 +69,10 @@ private:
 
     float m_x = 0.0f, m_y = 0.0f;
     float m_vx = 0.0f, m_vy = 0.0f;
+    // 本体40×80px。敵用の接触矩形はさらに周囲4pxを狭める。画像の大きさとは別管理。
     float m_width = 40.0f, m_height = 80.0f;
     float m_walkSpeed = 220.0f, m_runSpeed = 360.0f;
+    // 重力はpx/秒^2、ジャンプ初速はpx/秒。Yの負方向へ跳ぶ。
     float m_gravity = 2200.0f, m_jumpVelocity = -820.0f;
     float m_lowJumpRate = 0.45f;
     float m_jumpHoldGravityRate = 0.45f;
@@ -76,11 +84,13 @@ private:
 
     float m_respawnX = 220.0f;
     float m_respawnFootY = 620.0f;
+    // 非所有参照。GameSceneの共通ステージがPlayerより長く生存する構成で使う。
     const StageData* m_stage = nullptr;
     int m_playerIndex = 0;
     std::string m_error;
     int m_lastBumpedObjectId = -1;
 
+    // 画像ハンドルはこのPlayerが所有する。可変サイズの13コマを足元で揃える。
     int m_spriteSheet = -1, m_frameIndex = 0;
     float m_spriteScale = 0.34f;
     Animation m_animation = Animation::Idle;

@@ -1,4 +1,8 @@
-﻿#include "StageRenderer.h"
+﻿// 土管兄弟 ソース解説
+// TMX/TSXのCSVタイルと画像を読み、固定画面の地形・土管・POWを描く。
+// 床叩きの持ち上げは描画上の演出だけ。StageDataの判定矩形は動かさない。
+
+#include "StageRenderer.h"
 #include "StageData.h"
 #include <algorithm>
 #include "../ThirdParty/tinyxml2/tinyxml2.h"
@@ -16,6 +20,7 @@ StageRenderer::~StageRenderer()
     Release_();
 }
 
+// 読込済みタイル画像・POW画像と演出データをすべて片付ける。共有StageDataの状態は変更しない。
 void StageRenderer::Release_()
 {
     if (DxLib_IsInit() != 0)
@@ -34,6 +39,7 @@ void StageRenderer::Release_()
     m_mapPixelWidth = 0.0f;
 }
 
+// 読込途中でも取得済みの画像を解放し、エラーメッセージを残してfalseを返す。
 bool StageRenderer::Fail_(const std::string& message)
 {
     m_error = message;
@@ -41,6 +47,7 @@ bool StageRenderer::Fail_(const std::string& message)
     return false;
 }
 
+// TMX→外部TSX→画像の順に相対パスを解決する。見た目のタイルと画像オブジェクトだけを表示一覧へ変換する。
 bool StageRenderer::Load(const char* filename)
 {
     Release_();
@@ -65,6 +72,7 @@ bool StageRenderer::Load(const char* filename)
         && std::strcmp(map->Attribute("renderorder"), "right-down") != 0)
         return Fail_("Use right-down tile render order.");
     m_mapPixelWidth = static_cast<float>(mapWidth) * m_tileWidth;
+    // 外部TSXはTMX基準、画像はTSX基準へ切り替えて相対パスを解決する。
     const std::filesystem::path mapPath(filename);
 
     for (const tinyxml2::XMLElement* reference = map->FirstChildElement("tileset");
@@ -177,6 +185,7 @@ bool StageRenderer::Load(const char* filename)
             const auto parsed = std::from_chars(first, last, rawGid);
             if (parsed.ec != std::errc() || parsed.ptr != last)
                 return Fail_("CSV cells must be unsigned 32-bit tile IDs.");
+            // GID上位は反転フラグ。0は空セルで、画像を持つタイルだけを表示一覧へ追加する。
             const std::uint32_t gid = rawGid & 0x0fffffffu;
             if (gid != 0)
             {
@@ -238,6 +247,7 @@ bool StageRenderer::Load(const char* filename)
     return true;
 }
 
+// GIDからタイルセットと画像内の矩形を求め、上位ビットの反転指定を分離して保存する。
 bool StageRenderer::AddTile_(std::uint32_t rawGid, float x, float y,
     float width, float height, bool isPlatform)
 {
@@ -268,6 +278,7 @@ bool StageRenderer::AddTile_(std::uint32_t rawGid, float x, float y,
     return true;
 }
 
+// 床叩き演出の経過秒だけを進め、寿命を終えた演出を回収する。
 void StageRenderer::Update(float dt)
 {
     if (!std::isfinite(dt) || dt <= 0.0f) return;
@@ -277,6 +288,7 @@ void StageRenderer::Update(float dt)
         m_bumps.end());
 }
 
+// 同じ足場の既存演出を打撃位置付きで再開始する。地形の当たり判定は動かさない。
 void StageRenderer::Bump(const StageSolid& solid, float hitX)
 {
     if (!solid.bumpable || m_mapPixelWidth <= 0.0f || !std::isfinite(hitX)) return;
@@ -305,6 +317,7 @@ void StageRenderer::Bump(const StageSolid& solid, float hitX)
     m_bumps.push_back(effect);
 }
 
+// 打撃からの距離と時間に応じてタイルを上へ持ち上げる描画オフセットを求める。
 float StageRenderer::GetBumpOffset_(const Tile& tile) const
 {
     if (!tile.isPlatform) return 0.0f;
@@ -335,12 +348,14 @@ float StageRenderer::GetBumpOffset_(const Tile& tile) const
     return offset;
 }
 
+// StageDataで確定したPOW矩形と残数を描画側へ同期する。残数0なら描かない。
 void StageRenderer::SetPowState(const StageSolid& pow, int remainingUses)
 {
     m_pow = pow;
     if (remainingUses <= 0) m_pow.id = -1;
 }
 
+// タイルの反転・拡縮と床叩きの持ち上げを適用して描き、最後に現在のPOWを描く。
 void StageRenderer::Draw() const
 {
     for (const Tile& tile : m_tiles)

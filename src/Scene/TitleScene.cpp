@@ -1,4 +1,8 @@
-﻿#include "TitleScene.h"
+﻿// 土管兄弟 ソース解説
+// 背景画像、人数選択、操作説明、終了メニューを表示する。
+// 人数はSceneContextへ保存する。メニュー決定の長押しを次画面へ持ち越さない。
+
+#include "TitleScene.h"
 #include "SceneManager.h"
 #include "SceneType.h"
 #include "../Input/Input.h"
@@ -18,6 +22,7 @@ TitleScene::~TitleScene()
     if (m_headerFont != -1) DeleteFontToHandle(m_headerFont);
 }
 
+// メニュー選択と決定待ちを初期化し、背景・フォントを準備する。
 void TitleScene::Enter()
 {
     m_selected = 0;
@@ -39,6 +44,7 @@ void TitleScene::Enter()
         m_headerFont = CreateFontToHandle("Arial", 32, 8, DX_FONTTYPE_ANTIALIASING_4X4);
 }
 
+// 人数選択をSceneContextへ保存し、ゲーム開始・説明表示・終了を切り替える。
 void TitleScene::Update(float dt, const Input& input)
 {
     if (!m_mgr || m_actionRequested || !std::isfinite(dt) || dt <= 0.0f) return;
@@ -86,6 +92,7 @@ void TitleScene::Update(float dt, const Input& input)
     }
 }
 
+// フォントが使えない場合も含め、文字幅から中央Xを求めて描く。
 void TitleScene::DrawCentered_(const char* text, int y, int color, int font) const
 {
     const int length = static_cast<int>(std::strlen(text));
@@ -96,6 +103,7 @@ void TitleScene::DrawCentered_(const char* text, int y, int color, int font) con
     else DrawString(x, y, text, color);
 }
 
+// 1人/2人の操作と敵の倒し方を同じパネルへ表示する。
 void TitleScene::DrawHelp_() const
 {
     int mode = DX_BLENDMODE_NOBLEND, param = 0;
@@ -119,6 +127,7 @@ void TitleScene::DrawHelp_() const
     DrawCentered_("ENTER / SPACE: BACK     ESC: QUIT", 558, gold, m_smallFont);
 }
 
+// 背景と4項目のメニューを描き、必要なら操作説明パネルを重ねる。
 void TitleScene::Draw()
 {
     if (m_background != -1)

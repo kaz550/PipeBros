@@ -1,4 +1,8 @@
-﻿#include "Player.h"
+﻿// 土管兄弟 ソース解説
+// 1人分の移動・可変ジャンプ・復帰・スプライトと、2人間の接触解決を担当する。
+// ステージは所有せずGameSceneの共通StageDataを参照する。x/yは本体左上、Yの正方向は下。
+
+#include "Player.h"
 #include "../Input/Input.h"
 #include "../Core/Config.h"
 #include "DxLib.h"
@@ -22,6 +26,7 @@ Player::~Player()
     }
 }
 
+// 1P/2Pで別のファイルを読むが、両方とも1402×1122pxと同じ13コマの矩形を使う。
 bool Player::LoadSprite_()
 {
     if (m_spriteSheet != -1)
@@ -61,6 +66,7 @@ bool Player::LoadSprite_()
     return true;
 }
 
+// 共通StageDataを参照し、開始位置・速度・姿勢・接触吹き飛びを初期化する。2PはPlayer1の位置を左右反転する。
 void Player::Reset(const StageData& stage, int playerIndex)
 {
     if (playerIndex != m_playerIndex && m_spriteSheet != -1)
@@ -100,6 +106,7 @@ void Player::Reset(const StageData& stage, int playerIndex)
     m_landingTimer = 0.0f;
 }
 
+// ステージを読み直さず本人だけ復帰させる。POWが残っていれば現在の上面中央、なければ中央床へ戻す。
 void Player::Respawn()
 {
     // 画像やTMXを再読み込みせず、現在のPOWの状態に応じて復帰先を選ぶ。
@@ -129,6 +136,7 @@ void Player::Respawn()
     m_contactLockTimer = m_contactVelocityX = 0.0f;
 }
 
+// 操作→ジャンプ→重力→地形との移動判定→姿勢選択。プレイヤー間の接触は両者の更新後にGameSceneがまとめて解決する。
 void Player::Update(float dt, const Input& input)
 {
     if (dt <= 0.0f)
@@ -166,6 +174,7 @@ void Player::Update(float dt, const Input& input)
     UpdateAnimation_(dt);
 }
 
+// 押し合いの位置補正を、dt=1の移動として地形へ通す。dx/dyは速度でなく補正量。ここで新しい床叩きは発生させない。
 float Player::MoveByContact_(float dx, float dy)
 {
     const float oldX = m_x;
@@ -192,6 +201,7 @@ float Player::MoveByContact_(float dx, float dy)
     return moved;
 }
 
+// 下から突かれた際の初速と短い操作制限を設定する。無敵時間や残機は変更しない。
 void Player::LaunchByPlayer_(int direction)
 {
     m_contactVelocityX = direction * CONTACT_PUSH_SPEED;
@@ -202,9 +212,11 @@ void Player::LaunchByPlayer_(int direction)
     m_jumpHoldTimer = m_jumpPoseTimer = m_landingTimer = 0.0f;
 }
 
+// 移動前後の相対位置から接触方向を求め、横押し・頭突き・頭上着地を解決する。待機中やOUTの除外は呼出側の責任。
 void Player::ResolveContact(Player& first, Player& second,
     const Aabb& beforeFirst, const Aabb& beforeSecond)
 {
+    // 同じ画面上で最も近い相対距離を使い、左右端でも隣同士として扱う。
     const auto wrap = [](float value)
     {
         return value - std::round(value / SCREEN_W) * SCREEN_W;
@@ -215,6 +227,7 @@ void Player::ResolveContact(Player& first, Player& second,
     const float oldY2 = (beforeSecond.t + beforeSecond.b) * 0.5f;
     const float nowX1 = first.m_x + first.m_width * 0.5f;
     const float nowX2 = second.m_x + second.m_width * 0.5f;
+    // 移動前と移動後の「2P中心−1P中心」を比較し、どの面から接触したかを判定する。
     const float old[] = { wrap(oldX2 - oldX1), oldY2 - oldY1 };
     const float now[] = {
         old[0] + wrap(nowX2 - oldX2) - wrap(nowX1 - oldX1),
@@ -223,6 +236,7 @@ void Player::ResolveContact(Player& first, Player& second,
     const float half[] = { (first.m_width + second.m_width) * 0.5f,
         (first.m_height + second.m_height) * 0.5f };
     const float epsilon = 0.001f;
+    // 相対移動中の接触開始/終了を0〜1で求める。最終位置だけでは高速なすれ違いを見落とす。
     float enter = 0.0f, leave = 1.0f;
     int axisHit = -1;
     // 2人の相対移動区間を矩形へ通し、走ってすれ違うフレームも検出する。
@@ -314,6 +328,7 @@ void Player::ResolveContact(Player& first, Player& second,
     second.UpdateAnimation_(0.0f);
 }
 
+// 左右の入力と走る入力から横速度を決める。吹き飛び制限中はその速度を優先する。
 void Player::HandleMove_(const Input& input)
 {
     if (m_contactLockTimer > 0.0f)
@@ -360,6 +375,7 @@ void Player::HandleMove_(const Input& input)
     }
 }
 
+// 押した瞬間に跳び、長押し中は上昇を伸ばす。離した瞬間には上向き速度を弱める。
 void Player::HandleJump_(float dt, const Input& input)
 {
     if (m_contactLockTimer > 0.0f) return;
@@ -403,6 +419,7 @@ void Player::HandleJump_(float dt, const Input& input)
     }
 }
 
+// 接地中は重力を止める。ジャンプ長押しの上昇中だけ重力を軽くする。
 void Player::ApplyGravity_(float dt)
 {
     if (m_isGrounded)
@@ -420,6 +437,7 @@ void Player::ApplyGravity_(float dt)
     m_vy += m_gravity * gravityRate * dt;
 }
 
+// TMXの矩形と衝突しながら位置を進める。地形が読めない場合には左右ループだけを行う。
 void Player::UpdatePosition_(float dt)
 {
     if (m_stage && m_stage->IsLoaded())
@@ -454,6 +472,7 @@ void Player::UpdatePosition_(float dt)
     }
 }
 
+// 地形読込失敗時に限って簡易床を使う。通常の接地はStageData::Moveが決める。
 void Player::ClampToGround_()
 {
     if (m_stage && m_stage->IsLoaded())
@@ -477,6 +496,7 @@ void Player::ClampToGround_()
     }
 }
 
+// 姿勢の種類が変わったときだけ再生時計を戻す。同じ姿勢ならアニメを連続させる。
 void Player::ChangeAnimation_(Animation animation)
 {
     if (m_animation == animation)
@@ -488,6 +508,7 @@ void Player::ChangeAnimation_(Animation animation)
     m_animationTimer = 0.0f;
 }
 
+// 空中は縦速度で5種類の姿勢を選ぶ。歩き・走りは3枚を1→2→3→2で再生する。
 void Player::UpdateAnimation_(float dt)
 {
     if (!m_isGrounded)
@@ -562,6 +583,7 @@ void Player::UpdateAnimation_(float dt)
         + (moving && localFrame == 3 ? 1 : localFrame);
 }
 
+// 足元を基準に個別矩形を描く。左右端の複製にも同じ透明度を掛け、終わったら合成状態を戻す。
 void Player::Draw(int alpha) const
 {
     if (m_spriteSheet == -1 || alpha <= 0)
@@ -601,6 +623,7 @@ void Player::Draw(int alpha) const
         {1148, 883, 205, 212, 103.0f, 210.0f },
     };
 
+    // 上で列挙した切り出し矩形の個数。画像の13枚と歩行サイクルの4ステップは別の数。
     const int frameCount =
         static_cast<int>(sizeof(frames) / sizeof(frames[0]));
 
@@ -681,6 +704,7 @@ void Player::Draw(int alpha) const
     SetDrawBlendMode(previousBlendMode, previousBlendParam);
 }
 
+// 敵用の接触を少し緩めた矩形を返す。2人間の物理接触にはGetContactAabbの本体矩形を使う。
 Aabb Player::GetAabb() const
 {
     Aabb aabb;

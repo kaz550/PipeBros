@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// 共通ステージと2人分の状態を所有し、得点・残機・面進行・ボーナスを統括する。
+// Playerは各個体、EnemyManagerは敵全体を更新する。待ち時間と接触の順序もこのシーンで制御する。
+
+#pragma once
 #include "IScene.h"
 #include <string>
 #include <vector>
@@ -20,6 +24,7 @@ public:
 
 private:
     struct BonusCoin { float x, y; bool collected = false; };
+    // 個人の残機・得点・復帰/無敵時計。hits/defeatedの累積は現状の表示では未使用。
     struct PlayerState
     {
         int lives = 0, score = 0, hits = 0, defeated = 0;
@@ -42,6 +47,7 @@ private:
     void RestartStage_();
     void RespawnPlayer_(int playerIndex);
     void Finish_(bool stageClear);
+    // 時間の単位は秒。開始・クリア・復帰の待機は別々の状態として停止/再開する。
     static constexpr float STAGE_INTRO_DURATION = 1.5f;
     static constexpr float STAGE_CLEAR_DURATION = 1.2f;
     // ミスから復活までの秒数。0.0fなら従来の即時復活。
@@ -69,6 +75,7 @@ private:
     // ステージとPOWは全員で共有。描画・演出も1回だけ更新する。
     StageData m_stage;
     StageRenderer m_stageRenderer;
+    // 固定2枠のうちm_playerCount人だけを更新。配列の0番=1P、1番=2P。
     Player m_players[2];
     PlayerState m_playerStates[2];
     int m_playerCount = 1;

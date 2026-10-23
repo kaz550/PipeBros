@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// カメ・カニの状態、移動、周回加速、打撃と2人分の接触をまとめて扱う。
+// GameSceneが1フレームに1回だけ更新し、ContactResultで各プレイヤーへの結果を受け取る。
+
+#pragma once
 #include "Aabb.h"
 #include <string>
 #include <vector>
@@ -15,6 +19,7 @@ public:
     EnemyManager(const EnemyManager&) = delete;
     EnemyManager& operator=(const EnemyManager&) = delete;
     void Reset(const StageData& stage, Lineup lineup = Lineup::FromMap);
+    // GameSceneから渡す1フレーム分の個人情報。active=falseは復帰待ち・OUT等。
     struct PlayerContact
     {
         Aabb body{};
@@ -23,6 +28,7 @@ public:
         bool canHurt = false;
         bool active = false;
     };
+    // 返すhitは本人のミス、defeatedは本人がこのフレームに蹴った数。
     struct ContactResult { bool hit = false; int defeated = 0; };
     // 敵の時間を1回だけ進め、全員の打撃後に接触を調べる。
     // POWは衝撃を伝えてから共有のStageDataで消費する。
@@ -56,6 +62,7 @@ private:
         int x, y, width, height;
         float pivotX, pivotY;
     };
+    // 基本速度px/秒。1周ごとに25%を加え、4段階=2倍まで。怒りの倍率は別途掛ける。
     static constexpr float BASE_WALK_SPEED = 85.0f;
     static constexpr int LOOPS_PER_SPEEDUP = 1;
     static constexpr float SPEED_GAIN_PER_LEVEL = 0.25f;

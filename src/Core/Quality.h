@@ -1,3 +1,7 @@
+﻿// 土管兄弟 ソース解説
+// FPSサンプルに応じてHigh/Lowの品質状態を管理する。
+// 現在のゲーム描画はこの状態で品質を切り替えず、AppのQUALITY表示へ反映する。
+
 #pragma once
 
 enum class QualityLevel
@@ -11,7 +15,7 @@ class Quality
 public:
 	void Reset(QualityLevel start = QualityLevel::High);
 
-	// 1�b����fps���X�V���ꂽ�^�C�~���O�ŌĂԑz��
+	// 1秒平均fpsが更新されたタイミングで呼ぶ想定
 	void UpdateOnFpsSample(float fps);
 
 	void Force(QualityLevel lv);
@@ -21,7 +25,7 @@ public:
 private:
 	QualityLevel m_level = QualityLevel::High;
 
-	// �ufps�T���v���񐔁v�Ōp������iFps��1�b�X�V�̂��߁j
-	int m_lowCount = 0;   // fps < 30 �̘A����
-	int m_highCount = 0;  // fps > 40 �̘A����
+	// 「fpsサンプル回数」で継続判定（Fpsが1秒更新のため）
+	int m_lowCount = 0;   // fps < 30 の連続回数
+	int m_highCount = 0;  // fps > 40 の連続回数
 };

@@ -1,7 +1,12 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// TMXから衝突矩形・開始地点・敵の出入口・POW・コイン中心を読む。
+// タイルの見た目はStageRenderer。全プレイヤーと敵が同じ地形・POW残数を参照する。
+
+#pragma once
 #include <string>
 #include <vector>
 
+// 地形の矩形は左上座標とサイズ。idはTMXのオブジェクトID、bumpableは下から叩けるか。
 struct StageSolid
 {
     int id = -1;
@@ -67,6 +72,7 @@ public:
         bool& grounded, int& bumpedObjectId) const;
 
 private:
+    // 全個体が参照する地形。POWの縮小・消失もこの一覧へ反映し、2人で共有する。
     std::vector<StageSolid> m_solids;
     std::vector<StageEnemySpawn> m_enemySpawns;
     std::vector<StageEnemyExit> m_enemyExits;

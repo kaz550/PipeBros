@@ -1,4 +1,8 @@
-﻿#include "ResultScene.h"
+﻿// 土管兄弟 ソース解説
+// ゲームオーバー時の個人得点と共通成績を表示し、ハイスコア保存とリトライを扱う。
+// 通常クリアはGameScene内で次の面へ進むため、この画面を経由しない。
+
+#include "ResultScene.h"
 #include "SceneManager.h"
 #include "../Input/Input.h"
 #include "../Audio/Audio.h"
@@ -17,6 +21,7 @@ ResultScene::~ResultScene()
     if (m_headerFont != -1) DeleteFontToHandle(m_headerFont);
 }
 
+// ゲーム終了の得点を検証し、共通ハイスコアを超えたら保存する。2人時の候補は高い方の個人得点。
 void ResultScene::Enter()
 {
     m_selected = 0;
@@ -43,6 +48,7 @@ void ResultScene::Enter()
     }
 }
 
+// 押しっぱなしの決定を抑止し、RETRYかTITLEを要求する。RETRYではSceneContextの人数を維持する。
 void ResultScene::Update(float dt, const Input& input)
 {
     if (!m_mgr || m_actionRequested || !std::isfinite(dt) || dt <= 0.0f) return;
@@ -71,6 +77,7 @@ void ResultScene::Update(float dt, const Input& input)
     }
 }
 
+// 指定フォントの文字幅で中央配置する。フォント失敗時は既定描画へ切り替える。
 void ResultScene::DrawCentered_(const char* text, int y, int color, int font) const
 {
     const int length = static_cast<int>(std::strlen(text));
@@ -81,6 +88,7 @@ void ResultScene::DrawCentered_(const char* text, int y, int color, int font) co
     else DrawString(x, y, text, color);
 }
 
+// 地形を暗くして結果パネルを重ね、2人時は両者の個人得点を並べる。
 void ResultScene::Draw()
 {
     if (!m_mgr) return;

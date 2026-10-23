@@ -1,3 +1,7 @@
+﻿// 土管兄弟 ソース解説
+// ハイスコアをfloat値1個のバイナリファイルとして読み書きする。
+// 得点の加算はGameScene、最大値の更新と保存要求はResultSceneが担当する。
+
 #pragma once
 #include <string>
 

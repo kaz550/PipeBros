@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// ゲームオーバー時の個人得点と共通成績を表示し、ハイスコア保存とリトライを扱う。
+// 通常クリアはGameScene内で次の面へ進むため、この画面を経由しない。
+
+#pragma once
 #include "IScene.h"
 #include "../Game/StageRenderer.h"
 

@@ -1,4 +1,8 @@
-﻿#pragma once
+﻿// 土管兄弟 ソース解説
+// 背景画像、人数選択、操作説明、終了メニューを表示する。
+// 人数はSceneContextへ保存する。メニュー決定の長押しを次画面へ持ち越さない。
+
+#pragma once
 #include "IScene.h"
 
 class SceneManager;

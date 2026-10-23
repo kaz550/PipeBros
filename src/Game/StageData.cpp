@@ -1,10 +1,15 @@
-﻿#include "StageData.h"
+﻿// 土管兄弟 ソース解説
+// TMXから衝突矩形・開始地点・敵の出入口・POW・コイン中心を読む。
+// タイルの見た目はStageRenderer。全プレイヤーと敵が同じ地形・POW残数を参照する。
+
+#include "StageData.h"
 #include "../ThirdParty/tinyxml2/tinyxml2.h"
 #include "../Core/Config.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 
+// POW読込の共通入口。表示と判定が同じ矩形を使うため、StageDataとStageRendererから呼ぶ。
 bool ReadStagePow(const tinyxml2::XMLElement* map, StageSolid& pow, std::string& error)
 {
     pow = StageSolid{};
@@ -58,6 +63,7 @@ bool ReadStagePow(const tinyxml2::XMLElement* map, StageSolid& pow, std::string&
     return true;
 }
 
+// 前の面の状態を消し、TMXの判定とポイントを検証して読む。最後まで成功した場合だけm_loaded=trueにする。
 bool StageData::Load(const char* filename)
 {
     m_loaded = false;
@@ -86,6 +92,7 @@ bool StageData::Load(const char* filename)
         return false;
     }
 
+    // 判定に必要な矩形と、スポーン/コインのポイントだけを読む。タイル画像は別担当。
     bool hasRespawn = false;
     bool hasPlayer = false;
     bool hasGround = false;
@@ -280,6 +287,7 @@ bool StageData::Load(const char* filename)
     return true;
 }
 
+// 共通の残り回数を1つ減らす。下面を固定して薄くし、0なら衝突矩形も取り除く。
 bool StageData::UsePow()
 {
     if (!m_loaded || m_powUses <= 0) return false;
@@ -309,6 +317,7 @@ bool StageData::UsePow()
     return true;
 }
 
+// 移動区間を小分けにし、X→Yの順で矩形の側面・上面・下面との交差を解決する。位置・速度・接地・叩いたIDを参照引数で返す。
 void StageData::Move(float& x, float& y, float& vx, float& vy,
     float width, float height, float dt, float screenWidth,
     bool& grounded, int& bumpedObjectId) const
@@ -351,6 +360,7 @@ void StageData::Move(float& x, float& y, float& vx, float& vy,
         while (x + width * 0.5f < 0.0f) x += screenWidth;
         while (x + width * 0.5f >= screenWidth) x -= screenWidth;
 
+        // 横方向を確定してから縦を解決。落下は上面、上昇は下面を横切ったときだけ止める。
         const float oldY = y;
         float nextY = y + vy * stepTime;
         bool hitVertical = false;
