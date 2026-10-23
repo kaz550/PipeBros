@@ -39,7 +39,6 @@ private:
     int m_score = 0;
     int m_stageStartScore = 0;
     int m_hitCount = 0;
-    bool m_prevRestartKey = false;
     bool m_isFinished = false;
     bool m_isClear = false;
     bool m_resultRequested = false;

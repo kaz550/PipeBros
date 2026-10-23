@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 
 enum class Action
@@ -13,6 +13,12 @@ enum class Action
 
     ToggleFps, // F1
     ForceLow,  // F2
+
+    Jump,        // SPACE / PAD 1
+    Run,         // SHIFT / PAD 2
+    Restart,     // R
+    ToggleDebug, // F3
+    ToTitle,     // T
 
     COUNT
 };
@@ -35,7 +41,7 @@ private:
     float m_moveX = 0.0f;
     float m_moveY = 0.0f;
 
-    int GetActionDown_(Action a) const;
+    int GetActionDown_(Action a, int pad) const;
 
     int GetPadState_() const;
     static int IsKeyDown_(int key);

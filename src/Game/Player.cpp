@@ -95,7 +95,6 @@ void Player::Reset(float x, float groundY)
     m_respawnFootY = stageLoaded ? m_stage.GetPlayerRespawnFootY() : groundY;
     m_lastBumpedObjectId = -1;
     m_showStageDebug = !stageImagesLoaded;
-    m_prevDebugKey = CheckHitKey(KEY_INPUT_F3) != 0;
 
     m_vx = 0.0f;
     m_vy = 0.0f;
@@ -103,9 +102,6 @@ void Player::Reset(float x, float groundY)
     m_isGrounded = true;
     m_isJumpHolding = false;
     m_jumpHoldTimer = 0.0f;
-
-    m_prevJumpKey =
-        CheckHitKey(KEY_INPUT_SPACE) != 0;
 
     m_isRunning = false;
     m_facingLeft = false;
@@ -133,7 +129,6 @@ void Player::Respawn()
     m_isGrounded = false;
     m_isJumpHolding = false;
     m_jumpHoldTimer = 0.0f;
-    m_prevJumpKey = CheckHitKey(KEY_INPUT_SPACE) != 0;
     m_isRunning = false;
     m_facingLeft = false;
     m_animation = Animation::Idle;
@@ -145,8 +140,6 @@ void Player::Respawn()
 
 void Player::Update(float dt, const Input& input)
 {
-    (void)input;
-
     if (dt <= 0.0f)
     {
         return;
@@ -155,12 +148,10 @@ void Player::Update(float dt, const Input& input)
     m_stageRenderer.Update(dt);
 
     m_lastBumpedObjectId = -1;
-    const bool debugKey = CheckHitKey(KEY_INPUT_F3) != 0;
-    if (debugKey && !m_prevDebugKey)
+    if (input.Triggered(Action::ToggleDebug))
     {
         m_showStageDebug = !m_showStageDebug;
     }
-    m_prevDebugKey = debugKey;
 
     if (m_jumpPoseTimer > 0.0f)
     {
@@ -174,8 +165,8 @@ void Player::Update(float dt, const Input& input)
 
     const bool wasGrounded = m_isGrounded;
 
-    HandleMove_();
-    HandleJump_(dt);
+    HandleMove_(input);
+    HandleJump_(dt, input);
     ApplyGravity_(dt);
     UpdatePosition_(dt);
     ClampToGround_();
@@ -201,17 +192,16 @@ void Player::Update(float dt, const Input& input)
     UpdateAnimation_(dt);
 }
 
-void Player::HandleMove_()
+void Player::HandleMove_(const Input& input)
 {
     const bool left =
-        CheckHitKey(KEY_INPUT_LEFT) != 0;
+        input.Pressed(Action::Left);
 
     const bool right =
-        CheckHitKey(KEY_INPUT_RIGHT) != 0;
+        input.Pressed(Action::Right);
 
     const bool shift =
-        CheckHitKey(KEY_INPUT_LSHIFT) != 0 ||
-        CheckHitKey(KEY_INPUT_RSHIFT) != 0;
+        input.Pressed(Action::Run);
 
     int direction = 0;
 
@@ -242,16 +232,16 @@ void Player::HandleMove_()
     }
 }
 
-void Player::HandleJump_(float dt)
+void Player::HandleJump_(float dt, const Input& input)
 {
     const bool jumpKey =
-        CheckHitKey(KEY_INPUT_SPACE) != 0;
+        input.Pressed(Action::Jump);
 
     const bool pressed =
-        jumpKey && !m_prevJumpKey;
+        input.Triggered(Action::Jump);
 
     const bool released =
-        !jumpKey && m_prevJumpKey;
+        input.Released(Action::Jump);
 
     if (m_isGrounded && pressed)
     {
@@ -282,8 +272,6 @@ void Player::HandleJump_(float dt)
         m_vy *= m_lowJumpRate;
         m_isJumpHolding = false;
     }
-
-    m_prevJumpKey = jumpKey;
 }
 
 void Player::ApplyGravity_(float dt)

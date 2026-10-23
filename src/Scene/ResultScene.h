@@ -18,6 +18,5 @@ private:
     bool m_isNew = false;
     bool m_saveFailed = false;
     bool m_waitDecideRelease = true;
-    bool m_prevTitleKey = false;
     float m_inputLockTimer = 0.25f;
 };

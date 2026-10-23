@@ -1,4 +1,4 @@
-#include "Input.h"
+﻿#include "Input.h"
 #include "DxLib.h"
 
 int Input::IsKeyDown_(int key)
@@ -16,10 +16,8 @@ int Input::GetPadState_() const
     return GetJoypadInputState(DX_INPUT_KEY_PAD1);
 }
 
-int Input::GetActionDown_(Action a) const
+int Input::GetActionDown_(Action a, int pad) const
 {
-    const int pad = GetPadState_();
-
     const int padLeft = IsBitOn_(pad, PAD_INPUT_LEFT);
     const int padRight = IsBitOn_(pad, PAD_INPUT_RIGHT);
     const int padUp = IsBitOn_(pad, PAD_INPUT_UP);
@@ -50,6 +48,17 @@ int Input::GetActionDown_(Action a) const
     case Action::ForceLow:
         return IsKeyDown_(KEY_INPUT_F2);
 
+    case Action::Jump:
+        return IsKeyDown_(KEY_INPUT_SPACE) || padA;
+    case Action::Run:
+        return IsKeyDown_(KEY_INPUT_LSHIFT) || IsKeyDown_(KEY_INPUT_RSHIFT) || padB;
+    case Action::Restart:
+        return IsKeyDown_(KEY_INPUT_R);
+    case Action::ToggleDebug:
+        return IsKeyDown_(KEY_INPUT_F3);
+    case Action::ToTitle:
+        return IsKeyDown_(KEY_INPUT_T);
+
     default:
         return 0;
     }
@@ -58,9 +67,10 @@ int Input::GetActionDown_(Action a) const
 void Input::Update()
 {
     m_prev = m_curr;
+    const int pad = GetPadState_();
 
     for (int i = 0; i < (int)Action::COUNT; ++i)
-        m_curr[i] = GetActionDown_((Action)i);
+        m_curr[i] = GetActionDown_((Action)i, pad);
 
     m_moveX = 0.0f;
     if (Pressed(Action::Left))  m_moveX -= 1.0f;

@@ -42,8 +42,8 @@ private:
     enum class Animation { Idle, Walk, Run, Jump };
 
     bool LoadSprite_();
-    void HandleMove_();
-    void HandleJump_(float dt);
+    void HandleMove_(const Input& input);
+    void HandleJump_(float dt, const Input& input);
     void ApplyGravity_(float dt);
     void UpdatePosition_(float dt);
     void ClampToGround_();
@@ -60,7 +60,7 @@ private:
     float m_maxJumpHoldTime = 0.18f, m_jumpHoldTimer = 0.0f;
     float m_groundY = 620.0f;
     bool m_isGrounded = false, m_isJumpHolding = false;
-    bool m_prevJumpKey = false, m_isRunning = false;
+    bool m_isRunning = false;
     bool m_facingLeft = false;
 
     float m_respawnX = 220.0f;
@@ -69,7 +69,6 @@ private:
     StageRenderer m_stageRenderer;
     int m_lastBumpedObjectId = -1;
     bool m_showStageDebug = false;
-    bool m_prevDebugKey = false;
 
     int m_spriteSheet = -1, m_frameIndex = 0;
     float m_spriteScale = 0.34f;
@@ -77,4 +76,3 @@ private:
     float m_animationTimer = 0.0f;
     float m_jumpPoseTimer = 0.0f, m_landingTimer = 0.0f;
 };
-

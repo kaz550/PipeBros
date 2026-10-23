@@ -31,7 +31,6 @@ void GameScene::Enter()
     m_score = m_hitCount = m_stageStartScore = 0;
     m_stageTimeLimit = GetStageTimeLimit_(m_stageNumber);
     m_remainingTime = m_stageTimeLimit;
-    m_prevRestartKey = CheckHitKey(KEY_INPUT_R) != 0;
     m_isFinished = m_isClear = m_resultRequested = false;
     if (m_mgr)
     {
@@ -89,13 +88,11 @@ void GameScene::Finish_(bool stageClear)
 void GameScene::Update(float dt, const Input& input)
 {
     if (!std::isfinite(dt) || dt <= 0.0f) return;
-    const bool restartKey = CheckHitKey(KEY_INPUT_R) != 0;
-    if (restartKey && !m_prevRestartKey)
+    if (input.Triggered(Action::Restart))
     {
         Enter();
         return;
     }
-    m_prevRestartKey = restartKey;
     if (m_stageIntroTimer > 0.0f)
     {
         m_stageIntroTimer = m_stageIntroTimer > dt ? m_stageIntroTimer - dt : 0.0f;

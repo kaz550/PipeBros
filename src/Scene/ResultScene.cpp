@@ -10,7 +10,6 @@ void ResultScene::Enter()
 {
     m_isNew = m_saveFailed = false;
     m_waitDecideRelease = true;
-    m_prevTitleKey = CheckHitKey(KEY_INPUT_T) != 0;
     m_inputLockTimer = 0.25f;
     if (!m_background.Load("assets/stages/stage01.tmx"))
         printfDx("Result background load failed: %s\n", m_background.GetError().c_str());
@@ -33,13 +32,10 @@ void ResultScene::Update(float dt, const Input& input)
     if (input.Triggered(Action::ForceLow))
         m_mgr->Context().quality = QualityLevel::Low;
 
-    const bool titleKey = CheckHitKey(KEY_INPUT_T) != 0;
-    const bool titlePressed = titleKey && !m_prevTitleKey;
-    m_prevTitleKey = titleKey;
     if (!input.Pressed(Action::Decide)) m_waitDecideRelease = false;
     m_inputLockTimer = m_inputLockTimer > dt ? m_inputLockTimer - dt : 0.0f;
     if (m_inputLockTimer > 0.0f) return;
-    if (titlePressed || input.Triggered(Action::Back))
+    if (input.Triggered(Action::ToTitle) || input.Triggered(Action::Back))
     {
         Audio::Instance().PlaySe("back");
         m_mgr->RequestChange(SceneType::Title);
