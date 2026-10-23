@@ -1,6 +1,7 @@
 ﻿#include "StageData.h"
 #include "../ThirdParty/tinyxml2/tinyxml2.h"
 #include "../Core/Config.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -61,6 +62,8 @@ bool StageData::Load(const char* filename)
 {
     m_loaded = false;
     m_pow = StageSolid{};
+    m_powUses = 0;
+    m_powOriginalHeight = 0.0f;
     m_solids.clear();
     m_enemySpawns.clear();
     m_enemyExits.clear();
@@ -242,8 +245,39 @@ bool StageData::Load(const char* filename)
             }
         }
         m_solids.push_back(m_pow);
+        m_powUses = MAX_POW_USES;
+        m_powOriginalHeight = m_pow.height;
     }
     m_loaded = true;
+    return true;
+}
+
+bool StageData::UsePow()
+{
+    if (!m_loaded || m_powUses <= 0) return false;
+    --m_powUses;
+    if (m_powUses == 0)
+    {
+        // 最後の衝撃を処理した後、足場そのものを取り除く。
+        m_pow.bumpable = false;
+        m_solids.erase(std::remove_if(m_solids.begin(), m_solids.end(),
+            [this](const StageSolid& solid) { return solid.id == m_pow.id; }), m_solids.end());
+    }
+    else
+    {
+        // 下面の高さは固定。残り3/2/1回で高さを100/75/50%へ縮める。
+        const float bottom = m_pow.y + m_pow.height;
+        m_pow.height = m_powOriginalHeight * (m_powUses + 1) / (MAX_POW_USES + 1);
+        m_pow.y = bottom - m_pow.height;
+        for (StageSolid& solid : m_solids)
+        {
+            if (solid.id == m_pow.id)
+            {
+                solid = m_pow;
+                break;
+            }
+        }
+    }
     return true;
 }
 

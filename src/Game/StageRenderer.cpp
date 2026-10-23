@@ -335,6 +335,12 @@ float StageRenderer::GetBumpOffset_(const Tile& tile) const
     return offset;
 }
 
+void StageRenderer::SetPowState(const StageSolid& pow, int remainingUses)
+{
+    m_pow = pow;
+    if (remainingUses <= 0) m_pow.id = -1;
+}
+
 void StageRenderer::Draw() const
 {
     for (const Tile& tile : m_tiles)
@@ -353,7 +359,7 @@ void StageRenderer::Draw() const
             static_cast<double>(tile.height) / set.tileHeight,
             angle, set.graph, TRUE, flipX ? TRUE : FALSE, flipY ? TRUE : FALSE);
     }
-    if (m_powGraph != -1)
+    if (m_powGraph != -1 && m_pow.id != -1)
     {
         // 配布画像の透明な余白を除いた矩形を、TMXの矩形へ合わせる。
         constexpr int sourceX = 12, sourceY = 65, sourceWidth = 1751, sourceHeight = 756;

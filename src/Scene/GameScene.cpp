@@ -156,6 +156,11 @@ void GameScene::Update(float dt, const Input& input)
     const bool hit = m_enemyManager.Update(dt, m_player.GetStageData(),
         m_player.GetLastBumpedObjectId(), m_player.GetX() + m_player.GetWidth() * 0.5f,
         m_player.GetAabb(), m_invulnerabilityTimer <= 0.0f);
+    // 3回目も先に敵へ衝撃を伝え、その後に表示と当たり判定を消す。
+    const StageData& stage = m_player.GetStageData();
+    if (m_player.GetLastBumpedObjectId() != -1
+        && m_player.GetLastBumpedObjectId() == stage.GetPow().id)
+        m_player.UsePow();
 
     // やり直し前の得点に今回の撃破分を加える。再出現した敵も改めて加点する。
     m_score = m_stageStartScore + m_enemyManager.GetDefeatedCount() * SCORE_PER_ENEMY;

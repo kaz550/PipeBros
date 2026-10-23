@@ -18,6 +18,8 @@ public:
     // alpha: 0なら非表示、255なら通常表示。ステージには適用しない。
     void Draw(int alpha = 255) const;
     void Respawn();
+    // GameSceneでPOWの衝撃を敵へ適用した後に呼ぶ。
+    void UsePow();
     void UpdateVisualEffects(float dt);
     Aabb GetAabb() const;
     const StageData& GetStageData() const { return m_stage; }

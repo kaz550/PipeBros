@@ -18,6 +18,7 @@ public:
     void Update(float dt);
     void Bump(const StageSolid& solid, float hitX);
     void Draw() const;
+    void SetPowState(const StageSolid& pow, int remainingUses);
     const std::string& GetError() const { return m_error; }
 
 private:

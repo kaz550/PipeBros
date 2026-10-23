@@ -120,6 +120,12 @@ void Player::UpdateVisualEffects(float dt)
     m_stageRenderer.Update(dt);
 }
 
+void Player::UsePow()
+{
+    if (m_stage.UsePow())
+        m_stageRenderer.SetPowState(m_stage.GetPow(), m_stage.GetPowUses());
+}
+
 void Player::Respawn()
 {
     // 画像やTMXを再読み込みせず、プレイヤーだけを再出現ポイントへ戻す。
