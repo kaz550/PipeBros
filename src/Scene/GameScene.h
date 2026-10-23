@@ -15,6 +15,7 @@ public:
     void Draw() override;
 
 private:
+    static EnemyManager::Lineup GetStageLineup_(int stageNumber);
     static float GetStageTimeLimit_(int stageNumber);
     void RestartStage_();
     void Finish_(bool stageClear);

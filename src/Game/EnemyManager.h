@@ -9,11 +9,12 @@ class StageData;
 class EnemyManager
 {
 public:
+    enum class Lineup { FromMap, TurtlesOnly, CrabsOnly, Mixed };
     EnemyManager() = default;
     ~EnemyManager();
     EnemyManager(const EnemyManager&) = delete;
     EnemyManager& operator=(const EnemyManager&) = delete;
-    void Reset(const StageData& stage);
+    void Reset(const StageData& stage, Lineup lineup = Lineup::FromMap);
     // 通常状態の敵と接触し、プレイヤーにミスが発生した場合はtrue。
     bool Update(float dt, const StageData& stage, int bumpedSolidId,
         float hitX, const Aabb& player, bool canHurtPlayer);

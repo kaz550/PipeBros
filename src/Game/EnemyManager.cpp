@@ -67,7 +67,7 @@ bool EnemyManager::LoadCrabSprite_()
     return true;
 }
 
-void EnemyManager::Reset(const StageData& stage)
+void EnemyManager::Reset(const StageData& stage, Lineup lineup)
 {
     m_turtles.clear();
     m_defeatedCount = 0;
@@ -77,10 +77,22 @@ void EnemyManager::Reset(const StageData& stage)
         m_error = "Stage data is not loaded.";
         return;
     }
-    bool needsTurtle = false, needsCrab = false;
-    for (const StageEnemySpawn& spawn : stage.GetEnemySpawns())
+    // 地形・個体数・出現位置はTMX、種類の構成はステージ設定で選ぶ。
+    // FromMapなら、従来のenemyTypeプロパティをそのまま使う。
+    const auto getKind = [lineup](const StageEnemySpawn& spawn, int index)
     {
-        if (spawn.enemyType == "crab") needsCrab = true;
+        switch (lineup)
+        {
+        case Lineup::TurtlesOnly: return Kind::Turtle;
+        case Lineup::CrabsOnly: return Kind::Crab;
+        case Lineup::Mixed: return index % 2 == 0 ? Kind::Turtle : Kind::Crab;
+        default: return spawn.enemyType == "crab" ? Kind::Crab : Kind::Turtle;
+        }
+    };
+    bool needsTurtle = false, needsCrab = false;
+    for (int i = 0; i < static_cast<int>(stage.GetEnemySpawns().size()); ++i)
+    {
+        if (getKind(stage.GetEnemySpawns()[i], i) == Kind::Crab) needsCrab = true;
         else needsTurtle = true;
     }
     if (needsTurtle && !LoadSprite_()) return;
@@ -88,7 +100,7 @@ void EnemyManager::Reset(const StageData& stage)
     for (int i = 0; i < static_cast<int>(stage.GetEnemySpawns().size()); ++i)
     {
         Turtle turtle;
-        turtle.kind = stage.GetEnemySpawns()[i].enemyType == "crab" ? Kind::Crab : Kind::Turtle;
+        turtle.kind = getKind(stage.GetEnemySpawns()[i], i);
         RespawnTurtle_(turtle, stage, i);
         m_turtles.push_back(turtle);
     }

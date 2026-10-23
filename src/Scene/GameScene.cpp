@@ -11,6 +11,18 @@ GameScene::GameScene(SceneManager* mgr)
 {
 }
 
+EnemyManager::Lineup GameScene::GetStageLineup_(int stageNumber)
+{
+    if (stageNumber < 1) return EnemyManager::Lineup::TurtlesOnly;
+    // 01:カメ、02:カニ、03:混合。04以降もこの3構成を繰り返す。
+    switch ((stageNumber - 1) % 3)
+    {
+    case 0: return EnemyManager::Lineup::TurtlesOnly;
+    case 1: return EnemyManager::Lineup::CrabsOnly;
+    default: return EnemyManager::Lineup::Mixed;
+    }
+}
+
 float GameScene::GetStageTimeLimit_(int stageNumber)
 {
     // 現在はすべて通常ステージなので制限なし。
@@ -22,10 +34,10 @@ float GameScene::GetStageTimeLimit_(int stageNumber)
 
 void GameScene::Enter()
 {
-    m_player.Reset(PLAYER_START_X, GROUND_Y);
-    m_enemyManager.Reset(m_player.GetStageData());
-    m_invulnerabilityTimer = m_elapsedTime = m_finishTimer = 0.0f;
     m_stageNumber = 1;
+    m_player.Reset(PLAYER_START_X, GROUND_Y);
+    m_enemyManager.Reset(m_player.GetStageData(), GetStageLineup_(m_stageNumber));
+    m_invulnerabilityTimer = m_elapsedTime = m_finishTimer = 0.0f;
     m_stageIntroTimer = STAGE_INTRO_DURATION;
     m_lives = INITIAL_LIVES;
     m_score = m_hitCount = m_stageStartScore = 0;
@@ -40,7 +52,7 @@ void GameScene::Enter()
         context.lastLives = INITIAL_LIVES;
         context.lastDefeated = context.lastEnemyCount = context.lastHits = 0;
         context.lastPlayTime = 0.0f;
-        // 現在は同じ舞台を繰り返す。stageCount=0は最終ステージ未設定。
+        // 舞台は共通で、敵の構成を切り替える。stageCount=0は最終ステージ未設定。
         context.stageIndex = 0;
         context.stageCount = 0;
     }
@@ -51,7 +63,7 @@ void GameScene::RestartStage_()
     // 得点・残機・合計プレイ時間を保ち、ステージの状態だけを最初に戻す。
     m_stageStartScore = m_score;
     m_player.Reset(PLAYER_START_X, GROUND_Y);
-    m_enemyManager.Reset(m_player.GetStageData());
+    m_enemyManager.Reset(m_player.GetStageData(), GetStageLineup_(m_stageNumber));
     m_stageTimeLimit = GetStageTimeLimit_(m_stageNumber);
     m_remainingTime = m_stageTimeLimit;
     m_invulnerabilityTimer = 0.0f;
