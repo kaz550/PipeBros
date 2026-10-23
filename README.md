@@ -5,8 +5,7 @@
 **更新日：2026-10-17**。タイトル画面、基本の敵、得点・残機、次ステージへの進行まで実装済みです。現在は1人プレイ・カメ型の敵1種類・マップ1枚を繰り返す構成です。
 
 - リポジトリ：[kaz550/PipeBros](https://github.com/kaz550/PipeBros)
-- 詳細仕様：[GDD v1.1](docs/GDD.md)
-- 授業共有用：[GDD v1.1 Word版](docs/PipeBros_GDD_v1.1.docx)
+- 詳細仕様：[GDD v1.1](https://github.com/kaz550/PipeBros/blob/main/PipeBros_GDD_v1.0.docx)
 - 開発ベース：[Game A Week for DxLib Week05 Endless Jump Runner](https://github.com/kaz550/gaweek-week05-EndlessJumpRunner)
 
 ## 遊び方
