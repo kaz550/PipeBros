@@ -80,6 +80,7 @@ void Player::Reset(const StageData& stage, int playerIndex)
         : (SCREEN_W - m_width) * 0.5f;
     m_respawnFootY = stage.IsLoaded() ? stage.GetPlayerRespawnFootY() : m_groundY;
     m_lastBumpedObjectId = -1;
+    m_contactLockTimer = m_contactVelocityX = 0.0f;
 
     m_vx = 0.0f;
     m_vy = 0.0f;
@@ -125,6 +126,7 @@ void Player::Respawn()
     m_frameIndex = 0;
     m_jumpPoseTimer = m_landingTimer = 0.0f;
     m_lastBumpedObjectId = -1;
+    m_contactLockTimer = m_contactVelocityX = 0.0f;
 }
 
 void Player::Update(float dt, const Input& input)
@@ -134,7 +136,7 @@ void Player::Update(float dt, const Input& input)
         return;
     }
 
-
+    m_contactLockTimer = std::fmax(0.0f, m_contactLockTimer - dt);
     m_lastBumpedObjectId = -1;
 
     if (m_jumpPoseTimer > 0.0f)
@@ -164,8 +166,162 @@ void Player::Update(float dt, const Input& input)
     UpdateAnimation_(dt);
 }
 
+float Player::MoveByContact_(float dx, float dy)
+{
+    const float oldX = m_x;
+    if (m_stage && m_stage->IsLoaded())
+    {
+        float vx = dx, vy = dy;
+        bool grounded = false;
+        int ignoredBump = -1;
+        m_stage->Move(m_x, m_y, vx, vy, m_width, m_height, 1.0f,
+            static_cast<float>(SCREEN_W), grounded, ignoredBump);
+        m_isGrounded = grounded;
+        // 補正で触れた天井を、新しい床叩き・POW使用としては扱わない。
+    }
+    else
+    {
+        m_x += dx;
+        m_y += dy;
+        while (m_x + m_width * 0.5f < 0.0f) m_x += SCREEN_W;
+        while (m_x + m_width * 0.5f >= SCREEN_W) m_x -= SCREEN_W;
+        if (m_y + m_height > m_groundY) m_y = m_groundY - m_height;
+    }
+    float moved = m_x - oldX;
+    moved -= std::round(moved / SCREEN_W) * SCREEN_W;
+    return moved;
+}
+
+void Player::LaunchByPlayer_(int direction)
+{
+    m_contactVelocityX = direction * CONTACT_PUSH_SPEED;
+    m_contactLockTimer = CONTACT_LOCK_DURATION;
+    m_vx = m_contactVelocityX;
+    m_vy = CONTACT_LAUNCH_SPEED;
+    m_isGrounded = m_isJumpHolding = m_isRunning = false;
+    m_jumpHoldTimer = m_jumpPoseTimer = m_landingTimer = 0.0f;
+}
+
+void Player::ResolveContact(Player& first, Player& second,
+    const Aabb& beforeFirst, const Aabb& beforeSecond)
+{
+    const auto wrap = [](float value)
+    {
+        return value - std::round(value / SCREEN_W) * SCREEN_W;
+    };
+    const float oldX1 = (beforeFirst.l + beforeFirst.r) * 0.5f;
+    const float oldX2 = (beforeSecond.l + beforeSecond.r) * 0.5f;
+    const float oldY1 = (beforeFirst.t + beforeFirst.b) * 0.5f;
+    const float oldY2 = (beforeSecond.t + beforeSecond.b) * 0.5f;
+    const float nowX1 = first.m_x + first.m_width * 0.5f;
+    const float nowX2 = second.m_x + second.m_width * 0.5f;
+    const float old[] = { wrap(oldX2 - oldX1), oldY2 - oldY1 };
+    const float now[] = {
+        old[0] + wrap(nowX2 - oldX2) - wrap(nowX1 - oldX1),
+        second.m_y + second.m_height * 0.5f - first.m_y - first.m_height * 0.5f
+    };
+    const float half[] = { (first.m_width + second.m_width) * 0.5f,
+        (first.m_height + second.m_height) * 0.5f };
+    const float epsilon = 0.001f;
+    float enter = 0.0f, leave = 1.0f;
+    int axisHit = -1;
+    // 2人の相対移動区間を矩形へ通し、走ってすれ違うフレームも検出する。
+    for (int axis = 0; axis < 2; ++axis)
+    {
+        const float delta = now[axis] - old[axis];
+        if (std::fabs(delta) < epsilon)
+        {
+            if (std::fabs(old[axis]) > half[axis] + epsilon) return;
+        }
+        else
+        {
+            float a = (-half[axis] - old[axis]) / delta;
+            float b = (half[axis] - old[axis]) / delta;
+            if (a > b) { const float temp = a; a = b; b = temp; }
+            if (a > enter) { enter = a; axisHit = axis; }
+            leave = std::fmin(leave, b);
+        }
+        if (enter > leave + epsilon) return;
+    }
+    // 接触開始位置から離れるジャンプ・移動は引き戻さない。
+    if (axisHit == -1 && (std::fabs(now[0]) > half[0] + epsilon
+        || std::fabs(now[1]) > half[1] + epsilon)) return;
+    bool vertical = axisHit == 1;
+    if (axisHit == -1)
+    {
+        if (std::fabs(old[1]) >= half[1] - epsilon) vertical = true;
+        else vertical = half[1] - std::fabs(now[1]) < half[0] - std::fabs(now[0]);
+    }
+    if (vertical && std::fabs(now[0]) < half[0] - epsilon)
+    {
+        Player& upper = old[1] >= 0.0f ? first : second;
+        Player& lower = old[1] >= 0.0f ? second : first;
+        const float lowerVelocityY = lower.m_vy;
+        const float oldGap = std::fabs(old[1]) - half[1];
+        if (lowerVelocityY < -epsilon && oldGap >= -epsilon
+            && upper.m_contactLockTimer <= 0.0f)
+        {
+            // 下からの頭突き。上側を飛ばし、下側の上昇は止める。
+            int direction = lower.m_facingLeft ? -1 : 1;
+            const float offset = wrap(upper.m_x + upper.m_width * 0.5f
+                - lower.m_x - lower.m_width * 0.5f);
+            if (std::fabs(lower.m_vx) > epsilon) direction = lower.m_vx < 0.0f ? -1 : 1;
+            else if (std::fabs(offset) > epsilon) direction = offset < 0.0f ? -1 : 1;
+            lower.MoveByContact_(0.0f, upper.m_y + upper.m_height - lower.m_y);
+            lower.m_vy = 0.0f;
+            lower.m_isJumpHolding = false;
+            lower.m_jumpHoldTimer = lower.m_jumpPoseTimer = 0.0f;
+            upper.LaunchByPlayer_(direction);
+        }
+        else
+        {
+            // 上から降りた場合は頭の上に乗る。そこから通常のジャンプで離れられる。
+            upper.MoveByContact_(0.0f, lower.m_y - upper.m_height - upper.m_y);
+            if (std::fabs(upper.m_y + upper.m_height - lower.m_y) <= epsilon)
+            {
+                upper.m_vy = lower.m_vy;
+                upper.m_isGrounded = lower.m_isGrounded;
+                upper.m_isJumpHolding = false;
+                upper.m_jumpHoldTimer = upper.m_jumpPoseTimer = 0.0f;
+            }
+        }
+        // 頭上の足場や足元の床で縦補正できない場合は、横へ分ける。
+        const float overlapY = std::fmin(first.m_y + first.m_height, second.m_y + second.m_height)
+            - std::fmax(first.m_y, second.m_y);
+        if (overlapY <= epsilon)
+        {
+            first.UpdateAnimation_(0.0f);
+            second.UpdateAnimation_(0.0f);
+            return;
+        }
+    }
+    const float overlapY = std::fmin(first.m_y + first.m_height, second.m_y + second.m_height)
+        - std::fmax(first.m_y, second.m_y);
+    if (overlapY <= epsilon) return;
+    const float side = old[0] >= 0.0f ? 1.0f : -1.0f;
+    // 移動前の左右順を保つため、同フレームですれ違ってもすり抜けない。
+    float distance = wrap(second.m_x + second.m_width * 0.5f - first.m_x - first.m_width * 0.5f);
+    distance += std::round((now[0] - distance) / SCREEN_W) * SCREEN_W;
+    float remaining = half[0] - side * distance;
+    if (remaining <= epsilon) return;
+    const float halfPush = remaining * 0.5f;
+    remaining += side * first.MoveByContact_(-side * halfPush, 0.0f);
+    remaining -= side * second.MoveByContact_(side * halfPush, 0.0f);
+    // 一方が壁・POWで動けないなら、動ける側へ残りの補正を割り当てる。
+    if (remaining > epsilon) remaining += side * first.MoveByContact_(-side * remaining, 0.0f);
+    if (remaining > epsilon) second.MoveByContact_(side * remaining, 0.0f);
+    first.UpdateAnimation_(0.0f);
+    second.UpdateAnimation_(0.0f);
+}
+
 void Player::HandleMove_(const Input& input)
 {
+    if (m_contactLockTimer > 0.0f)
+    {
+        m_vx = m_contactVelocityX;
+        m_isRunning = false;
+        return;
+    }
     const bool left =
         input.Pressed(Action::Left);
 
@@ -206,6 +362,7 @@ void Player::HandleMove_(const Input& input)
 
 void Player::HandleJump_(float dt, const Input& input)
 {
+    if (m_contactLockTimer > 0.0f) return;
     const bool jumpKey =
         input.Pressed(Action::Jump);
 

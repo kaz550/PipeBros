@@ -19,6 +19,10 @@ public:
     void Draw(int alpha = 255) const;
     void Respawn();
     Aabb GetAabb() const;
+    // 敵用より少し広い、プレイヤー同士の本体矩形。
+    Aabb GetContactAabb() const { return { m_x, m_y, m_x + m_width, m_y + m_height }; }
+    static void ResolveContact(Player& first, Player& second,
+        const Aabb& beforeFirst, const Aabb& beforeSecond);
     const std::string& GetError() const { return m_error; }
 
     float GetX() const { return m_x; }
@@ -40,6 +44,14 @@ private:
     };
     enum class Animation { Idle, Walk, Run, Jump };
 
+    // 接触補正にもステージ判定を使い、壁・POWへ押し込まない。
+    float MoveByContact_(float dx, float dy);
+    void LaunchByPlayer_(int direction);
+    static constexpr float CONTACT_PUSH_SPEED = 280.0f;
+    static constexpr float CONTACT_LAUNCH_SPEED = -460.0f;
+    static constexpr float CONTACT_LOCK_DURATION = 0.20f;
+    float m_contactLockTimer = 0.0f;
+    float m_contactVelocityX = 0.0f;
     bool LoadSprite_();
     void HandleMove_(const Input& input);
     void HandleJump_(float dt, const Input& input);

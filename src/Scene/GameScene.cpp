@@ -244,6 +244,7 @@ void GameScene::Update(float dt, const Input& input)
     else m_elapsedTime += dt;
     if (m_isBonus) { UpdateBonus_(dt, input); return; }
 
+    Aabb contactBefore[2]{};
     EnemyManager::PlayerContact contacts[2];
     EnemyManager::ContactResult results[2];
     for (int i = 0; i < m_playerCount; ++i)
@@ -259,6 +260,7 @@ void GameScene::Update(float dt, const Input& input)
             continue;
         }
         state.invulnerability = (std::max)(0.0f, state.invulnerability - dt);
+        contactBefore[i] = m_players[i].GetContactAabb();
         m_players[i].Update(dt, input.ForPlayer(i, m_playerCount));
         contacts[i].body = m_players[i].GetAabb();
         contacts[i].bumpedSolidId = m_players[i].GetLastBumpedObjectId();
@@ -268,6 +270,11 @@ void GameScene::Update(float dt, const Input& input)
         for (const StageSolid& solid : m_stage.GetSolids())
             if (solid.id == contacts[i].bumpedSolidId) { m_stageRenderer.Bump(solid, contacts[i].hitX); break; }
     }
+    if (m_playerCount == 2 && contacts[0].active && contacts[1].active)
+        Player::ResolveContact(m_players[0], m_players[1], contactBefore[0], contactBefore[1]);
+    // 押し合いで移動した後の位置で、敵への接触・蹴りを判定する。
+    for (int i = 0; i < m_playerCount; ++i)
+        if (contacts[i].active) contacts[i].body = m_players[i].GetAabb();
     // 人数にかかわらず敵の物理・周回タイマーは1フレームに1回だけ進む。
     m_enemyManager.Update(dt, m_stage, contacts, results, m_playerCount);
     m_stageRenderer.SetPowState(m_stage.GetPow(), m_stage.GetPowUses());
@@ -425,13 +432,20 @@ bool GameScene::LoadBonusSprite_()
 
 void GameScene::UpdateBonus_(float dt, const Input& input)
 {
-    Aabb before[2]{}, after[2]{};
+    Aabb before[2]{}, after[2]{}, contactBefore[2]{};
     for (int i = 0; i < m_playerCount; ++i)
     {
         if (m_playerStates[i].lives <= 0) continue;
         before[i] = m_players[i].GetAabb();
+        contactBefore[i] = m_players[i].GetContactAabb();
         m_players[i].Update(dt, input.ForPlayer(i, m_playerCount));
         after[i] = m_players[i].GetAabb();
+    }
+    if (m_playerCount == 2 && m_playerStates[0].lives > 0 && m_playerStates[1].lives > 0)
+    {
+        Player::ResolveContact(m_players[0], m_players[1], contactBefore[0], contactBefore[1]);
+        after[0] = m_players[0].GetAabb();
+        after[1] = m_players[1].GetAabb();
     }
     m_bonusAnimationTime = std::fmod(m_bonusAnimationTime + dt, 0.6f);
     for (BonusCoin& coin : m_bonusCoins)
