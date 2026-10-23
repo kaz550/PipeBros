@@ -49,8 +49,8 @@ bool ReadStagePow(const tinyxml2::XMLElement* map, StageSolid& pow, std::string&
                 error = "POW must be an unrotated rectangle with positive size in an unmodified Objects layer.";
                 return false;
             }
-            // 今回は足場のみ。通常の床叩きによる敵への効果には含めない。
-            candidate.bumpable = false;
+            // 下面から叩いたとき、POWのIDをPlayerへ通知する。
+            candidate.bumpable = true;
             pow = candidate;
         }
     }

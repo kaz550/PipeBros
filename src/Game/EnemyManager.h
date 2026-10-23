@@ -51,6 +51,7 @@ private:
     bool TryExit_(Turtle& turtle, const StageData& stage, float dt);
     void UpdateTurtle_(Turtle& turtle, float dt, const StageData& stage);
     void ResolveEnemyContacts_(float dt);
+    static void ApplyHit_(Turtle& turtle);
     void ApplyBump_(const StageData& stage, int solidId, float hitX);
     void Kick_(Turtle& turtle, int direction);
     bool TouchesPlayer_(const Turtle& turtle, const Aabb& player) const;
@@ -60,4 +61,3 @@ private:
     int m_defeatedCount = 0;
     std::string m_error;
 };
-

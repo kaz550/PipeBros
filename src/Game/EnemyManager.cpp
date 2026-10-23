@@ -208,9 +208,38 @@ void EnemyManager::ResolveEnemyContacts_(float dt)
     }
 }
 
+void EnemyManager::ApplyHit_(Turtle& turtle)
+{
+    if (!turtle.active || !turtle.grounded
+        || turtle.state == State::Defeated || turtle.state == State::Respawning) return;
+    // 通常時は転倒、転倒・復帰中ならもう一度叩くと通常状態へ戻す。
+    if (turtle.state == State::Walking)
+    {
+        turtle.state = State::Overturned;
+        turtle.stateTime = 6.0f;
+    }
+    else
+    {
+        turtle.state = State::Walking;
+        turtle.stateTime = 0.0f;
+    }
+    turtle.animationTime = 0.0f;
+    turtle.vx = 0.0f;
+    turtle.vy = -220.0f;
+    turtle.grounded = false;
+}
+
 void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
 {
     if (solidId == -1) return;
+    const StageSolid& pow = stage.GetPow();
+    if (pow.id == solidId && pow.bumpable)
+    {
+        // POWは足場や距離を問わず、その瞬間に接地している敵へ届く。
+        // 通常の床叩きと同じ状態変化を1回だけ適用する。
+        for (Turtle& turtle : m_turtles) ApplyHit_(turtle);
+        return;
+    }
     for (const StageSolid& solid : stage.GetSolids())
     {
         if (solid.id != solidId || !solid.bumpable) continue;
@@ -228,21 +257,7 @@ void EnemyManager::ApplyBump_(const StageData& stage, int solidId, float hitX)
             if (centerX + turtle.width * 0.5f <= solid.x
                 || centerX - turtle.width * 0.5f >= solid.x + solid.width
                 || std::fabs(centerX - hitX) > 80.0f) continue;
-            // 通常時は転倒、転倒・復帰中ならもう一度叩くと通常状態へ戻す。
-            if (turtle.state == State::Walking)
-            {
-                turtle.state = State::Overturned;
-                turtle.stateTime = 6.0f;
-            }
-            else
-            {
-                turtle.state = State::Walking;
-                turtle.stateTime = 0.0f;
-            }
-            turtle.animationTime = 0.0f;
-            turtle.vx = 0.0f;
-            turtle.vy = -220.0f;
-            turtle.grounded = false;
+            ApplyHit_(turtle);
         }
         break;
     }
@@ -352,4 +367,3 @@ void EnemyManager::Draw() const
         }
     }
 }
-
